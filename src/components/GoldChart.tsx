@@ -216,15 +216,17 @@ export default function GoldChart({ candles, analysis, showAll }: Props) {
 
     series.setData(showAll.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
 
-    const lines: ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']>[] = [];
+    const lines: (ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']> | null)[] = [];
     if (analysis) {
-      const mk = (price: number, color: string, title: string, style: 'solid' | 'dashed' | 'dotted' = 'dashed') =>
-        series.createPriceLine({
+      const mk = (price: number, color: string, title: string, style: 'solid' | 'dashed' | 'dotted' = 'dashed') => {
+        if (!Number.isFinite(price)) return null;
+        return series.createPriceLine({
           price, color, title,
           lineWidth: style === 'solid' ? 2 : 1,
           lineStyle: style === 'solid' ? 0 : style === 'dashed' ? 2 : 1,
           axisLabelVisible: true,
         });
+      };
       lines.push(mk(analysis.open, C.open, 'الافتتاح', 'solid'));
       lines.push(mk(analysis.asiaHigh, C.asia, 'قمة آسيا'));
       lines.push(mk(analysis.asiaLow, C.asia, 'قاع آسيا'));
@@ -283,7 +285,7 @@ export default function GoldChart({ candles, analysis, showAll }: Props) {
 
     return () => {
       pm.detach();
-      lines.forEach((l) => series.removePriceLine(l));
+      lines.forEach((l) => l && series.removePriceLine(l));
     };
   }, [showAll, analysis, candles]);
 

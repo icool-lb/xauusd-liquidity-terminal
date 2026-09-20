@@ -262,14 +262,15 @@ function cluster(values: number[], tol: number): number[] {
 
 export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null {
   const dayCandles = all.filter((c) => c.time >= dayStart && c.time < dayStart + DAY);
-  if (dayCandles.length < 40) return null;
+  if (dayCandles.length < 10) return null;
   const prevCandles = all.filter((c) => c.time >= dayStart - DAY && c.time < dayStart);
   const hist = all.filter((c) => c.time < dayStart);
 
   const open = dayCandles[0].open;
   const asiaC = dayCandles.filter((c) => sessionOf(c.time) === 'asia');
-  const asiaHigh = Math.max(...asiaC.map((c) => c.high));
-  const asiaLow = Math.min(...asiaC.map((c) => c.low));
+  // إذا لم تصلنا شموع آسيا بعد (بيانات محدودة)، نستخدم أقرب تقدير متاح
+  const asiaHigh = asiaC.length ? Math.max(...asiaC.map((c) => c.high)) : Math.max(...dayCandles.slice(0, 8).map((c) => c.high));
+  const asiaLow = asiaC.length ? Math.min(...asiaC.map((c) => c.low)) : Math.min(...dayCandles.slice(0, 8).map((c) => c.low));
   const pdh = prevCandles.length ? Math.max(...prevCandles.map((c) => c.high)) : asiaHigh + 15;
   const pdl = prevCandles.length ? Math.min(...prevCandles.map((c) => c.low)) : asiaLow - 15;
 

@@ -118,18 +118,44 @@ function mapCandle(c: RawCandle): Candle {
   };
 }
 
-// شموع تاريخية M15 لعدد أيام
+// شموع تاريخية M15 — مع محاولة سحب أعمق تاريخ متاح بعدة استراتيجيات
 export async function fetchHistory(creds: MetaApiCreds, region: string, days: number): Promise<Candle[]> {
   const startTime = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
-  const url =
+  const base =
     `/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
-    `/historical-market-data/symbols/${encodeURIComponent(creds.symbol)}` +
-    `/timeframes/15m/candles?startTime=${encodeURIComponent(startTime)}&limit=1000`;
-  const raw: RawCandle[] = await apiFetchHosts(mdHosts(region), url, creds.token);
-  if (!Array.isArray(raw) || raw.length === 0) {
+    `/historical-market-data/symbols/${encodeURIComponent(creds.symbol)}/timeframes/15m/candles`;
+
+  const map = (raw: RawCandle[]): Candle[] =>
+    raw.map(mapCandle).sort((a, b) => a.time - b.time);
+
+  // المحاولة 1: منذ N أيام بحد 1000
+  let candles = map(await apiFetchHosts(mdHosts(region), `${base}?startTime=${encodeURIComponent(startTime)}&limit=1000`, creds.token));
+
+  // المحاولة 2: بدون startTime (بعض الحسابات تعيد الأحدث افتراضياً بعمق أكبر)
+  if (candles.length < 400) {
+    try {
+      const alt = map(await apiFetchHosts(mdHosts(region), `${base}?limit=1000`, creds.token));
+      const merged = new Map<number, Candle>();
+      for (const c of [...alt, ...candles]) merged.set(c.time, c);
+      candles = [...merged.values()].sort((a, b) => a.time - b.time);
+    } catch { /* نكتفي بالمحاولة الأولى */ }
+  }
+
+  // المحاولة 3: ترقيم للخلف عبر endTime إن كان مدعوماً
+  for (let i = 0; i < 3 && candles.length >= 1000; i++) {
+    try {
+      const oldest = new Date(candles[0].time * 1000 - 60 * 1000).toISOString();
+      const older = map(await apiFetchHosts(mdHosts(region), `${base}?endTime=${encodeURIComponent(oldest)}&limit=1000`, creds.token));
+      const fresh = older.filter((c) => c.time < candles[0].time);
+      if (!fresh.length) break;
+      candles = [...fresh, ...candles];
+    } catch { break; }
+  }
+
+  if (!candles.length) {
     throw new Error(`لا توجد بيانات للرمز ${creds.symbol} — جرّب صيغة وسيطك (XAUUSD. / XAUUSD.pro / GOLD)`);
   }
-  return raw.map(mapCandle).sort((a, b) => a.time - b.time);
+  return candles;
 }
 
 // الشمعة الحالية (المتكونة الآن)

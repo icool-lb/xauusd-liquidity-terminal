@@ -116,7 +116,7 @@ export default function App() {
 
   const todayStart = Math.floor(Date.now() / 1000 / DAY) * DAY;
   const analysis: DayAnalysis | null = useMemo(
-    () => (all.length >= 60 ? analyzeDay(all, todayStart - dayOffset * DAY) : null),
+    () => (all.length >= 10 ? analyzeDay(all, todayStart - dayOffset * DAY) : null),
     [all, todayStart, dayOffset]
   );
   const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, DAYS - 1) : null), [all]);
@@ -178,7 +178,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V5</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V7</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -240,16 +240,16 @@ export default function App() {
       {/* ===== شريط المستويات ===== */}
       {analysis && (
         <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-[#1a2540] bg-[#070b14] px-4 py-1.5 text-[10px]">
-          {[
+          {([
             ['قمة الأمس', analysis.pdh, 'text-violet-300'],
             ['قمة آسيا', analysis.asiaHigh, 'text-amber-300'],
             ['الافتتاح', analysis.open, 'text-cyan-300'],
             ['قاع آسيا', analysis.asiaLow, 'text-amber-300'],
             ['قاع الأمس', analysis.pdl, 'text-violet-300'],
-          ].map(([l, v, c], i) => (
+          ] as [string, number, string][]).filter(([, v]) => Number.isFinite(v)).map(([l, v, c], i) => (
             <div key={i} className="flex shrink-0 items-center gap-1.5 rounded-sm bg-[#0c1220] px-2.5 py-1">
               <span className="text-slate-500">{l}</span>
-              <span dir="ltr" className={`font-mono font-bold ${c}`}>{fmt(v as number)}</span>
+              <span dir="ltr" className={`font-mono font-bold ${c}`}>{fmt(v)}</span>
             </div>
           ))}
           <div className="mr-auto flex shrink-0 items-center gap-3">
@@ -353,6 +353,9 @@ export default function App() {
             <span className="mr-2 text-[9px] font-normal text-slate-600">
               {chartView === 'tv' ? 'مرجع بصري للسعر الحقيقي — التحليل والإشارات في شارت التحليل' : ''}
             </span>
+            {mode === 'live' && dataInfo && (
+              <span dir="ltr" className="mr-auto rounded-sm bg-emerald-400/10 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-300">{dataInfo}</span>
+            )}
           </div>
           <div className="min-h-0 flex-1 p-2">
             <div className="relative h-full overflow-hidden rounded-md border border-[#1a2540] bg-[#050810] p-1">

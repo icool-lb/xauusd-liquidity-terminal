@@ -73,3 +73,35 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ===== خطوط المنصة والطبقة الجمالية ===== */
+body {
+  font-family: 'IBM Plex Sans Arabic', 'JetBrains Mono', system-ui, sans-serif;
+  background: #050810;
+}
+.font-mono, code {
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* طبقة scanline خفيفة بطابع المحطات المالية */
+.scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(255, 255, 255, 0.012) 3px
+  );
+}
+
+/* شريط تمرير رفيع */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #080c16; }
+::-webkit-scrollbar-thumb { background: #1a2540; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #2a3a5f; }
+
+* { border-radius: 2px; }

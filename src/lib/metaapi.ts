@@ -118,7 +118,8 @@ function mapCandle(c: RawCandle): Candle {
   };
 }
 
-// شموع تاريخية M15 — ترقيم للأمام: كل دفعة 1000 شمعة حتى الوصول للحاضر
+// شموع تاريخية M15 — واجهة MetaApi ترقّم للخلف من startTime:
+// نبدأ من الآن ونسحب 1000 شمعة في كل دفعة رجوعاً حتى نغطي المدة المطلوبة
 export async function fetchHistory(creds: MetaApiCreds, region: string, days: number): Promise<Candle[]> {
   const base =
     `/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
@@ -127,19 +128,21 @@ export async function fetchHistory(creds: MetaApiCreds, region: string, days: nu
   const map = (raw: RawCandle[]): Candle[] =>
     raw.map(mapCandle).sort((a, b) => a.time - b.time);
 
+  const target = Date.now() - days * 24 * 3600 * 1000;
   let out: Candle[] = [];
-  let from = new Date(Date.now() - days * 24 * 3600 * 1000);
-  for (let i = 0; i < 8; i++) {
+  let from = new Date(); // نبدأ من اللحظة الحالية ونرجع للماضي
+  for (let i = 0; i < 12; i++) {
     const chunk = map(await apiFetchHosts(
       mdHosts(region),
       `${base}?startTime=${encodeURIComponent(from.toISOString())}&limit=1000`,
       creds.token
     ));
-    const fresh = chunk.filter((c) => !out.length || c.time > out[out.length - 1].time);
+    const fresh = chunk.filter((c) => !out.length || c.time < out[0].time);
     if (!fresh.length) break;
-    out = [...out, ...fresh];
-    if (chunk.length < 1000) break; // وصلنا لنهاية المتاح
-    from = new Date((out[out.length - 1].time + 900) * 1000);
+    out = [...fresh, ...out];
+    if (chunk.length < 1000) break; // وصلنا لأقدم ما يتيحه الوسيط
+    if (out[0].time * 1000 <= target) break; // غطّينا المدة المطلوبة
+    from = new Date((out[0].time - 1) * 1000);
   }
 
   if (!out.length) {

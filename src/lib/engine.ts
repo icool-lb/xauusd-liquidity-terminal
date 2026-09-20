@@ -654,3 +654,54 @@ export function autoLiquidityZones(a: DayAnalysis): LiqZone[] {
   mk(a.asiaLow, 'sell', 'سيولة بيعية — تحت قاع آسيا', 'ASIA_L');
   return zones;
 }
+
+// ---------- كشف الأوردر بلوك (Order Blocks) تلقائياً ----------
+// القاعدة ICT: آخر شمعة معاكسة قبل حركة كاسرة للهيكل (BOS/CHoCH)
+export interface OrderBlock {
+  time: number;
+  top: number;
+  bottom: number;
+  dir: 'up' | 'down'; // up = بلوك شرائي، down = بلوك بيعي
+  kind: string;       // BOS أو CHoCH التي ولّدته
+  to?: number;        // متى لامسه السعر مجدداً (تُوقف المنطقة عنده)
+  broken: boolean;    // اخترقه إغلاق → استُهلك ولا يُرسم
+}
+
+export function detectOrderBlocks(candles: Candle[], lookback = 200): OrderBlock[] {
+  const out: OrderBlock[] = [];
+  const start = Math.max(0, candles.length - lookback);
+  const marks = detectStructure(candles, 3);
+
+  for (const m of marks) {
+    const bi = candles.findIndex((c) => c.time >= m.time);
+    if (bi < start + 2) continue;
+    // آخر شمعة معاكسة للاتجاه خلال 12 شمعة قبل الكسر
+    let j = -1;
+    for (let i = bi - 1; i >= Math.max(start, bi - 12); i--) {
+      const c = candles[i];
+      if (m.dir === 'up' && c.close < c.open) { j = i; break; }
+      if (m.dir === 'down' && c.close > c.open) { j = i; break; }
+    }
+    if (j < 0) continue;
+    const c = candles[j];
+    const ob: OrderBlock = { time: c.time, top: c.high, bottom: c.low, dir: m.dir, kind: m.kind, broken: false };
+    // تتبّع ما بعد الكسر: أول لمسة تُوقف المنطقة، وإغلاق خلالها يستهلكها
+    for (let i = bi; i < candles.length; i++) {
+      const cc = candles[i];
+      if (m.dir === 'up') {
+        if (cc.close < ob.bottom) { ob.broken = true; break; }
+        if (cc.low <= ob.top) { ob.to = cc.time; break; }
+      } else {
+        if (cc.close > ob.top) { ob.broken = true; break; }
+        if (cc.high >= ob.bottom) { ob.to = cc.time; break; }
+      }
+    }
+    // إلغاء التكرار: تجاهل بلوك متراكب مع السابق من نفس الاتجاه
+    const prev = out[out.length - 1];
+    if (prev && prev.dir === ob.dir && prev.bottom < ob.top && ob.bottom < prev.top && Math.abs(prev.time - ob.time) < 4 * 3600) {
+      continue;
+    }
+    out.push(ob);
+  }
+  return out.slice(-10); // آخر 10 بلوكات فقط حفاظاً على وضوح الشارت
+}

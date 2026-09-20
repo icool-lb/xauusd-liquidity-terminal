@@ -9,8 +9,6 @@ import {
   loadCreds, saveCreds, loadRegion, resolveAccount, fetchHistory, fetchCurrentCandle, fetchPrice,
   type MetaApiCreds,
 } from './lib/metaapi';
-import { TOOL_META, loadDrawings, saveDrawings, uid, type Drawing, type ToolId } from './lib/drawings';
-
 const DAY = 24 * 3600;
 const BT_DAYS = 25; // أيام الباك-تيست من التاريخ المحمَّل (30 يوماً)
 
@@ -103,59 +101,14 @@ export default function App() {
 
   const all = liveData;
 
-  // ---- أدوات الرسم والفريمات ----
+  // ---- الفريمات والطبقات التلقائية ----
   const [tf, setTf] = useState(900); // بالثواني
-  const [layers, setLayers] = useState({ fvg: true, bos: true, liq: true, sess: false });
-  const [activeTool, setActiveTool] = useState<ToolId>('none');
-  const [pending, setPending] = useState<{ t: number; p: number } | null>(null);
-  const [drawings, setDrawings] = useState<Drawing[]>([]);
+  const [layers, setLayers] = useState({ fvg: true, bos: true, liq: true, sess: false, ob: true });
 
   const todayStart = Math.floor(Date.now() / 1000 / DAY) * DAY;
   const lastDataDay = all.length ? Math.floor(all[all.length - 1].time / DAY) * DAY : todayStart;
   const effDayStart = Math.min(todayStart - dayOffset * DAY, lastDataDay);
   const dataStale = all.length > 0 && todayStart - lastDataDay >= DAY * 2;
-  const dayKey = new Date(effDayStart * 1000).toISOString().slice(0, 10);
-  const symbolKey = creds?.symbol ?? 'XAUUSD';
-
-  // تحميل/حفظ الرسوم لكل يوم ورمز
-  useEffect(() => {
-    setDrawings(loadDrawings(symbolKey, dayKey));
-    setPending(null);
-  }, [symbolKey, dayKey]);
-  useEffect(() => {
-    saveDrawings(symbolKey, dayKey, drawings);
-  }, [drawings, symbolKey, dayKey]);
-
-  const handleChartClick = (t: number, p: number) => {
-    if (activeTool === 'none') return;
-    const price = Math.round(p * 100) / 100;
-    if (activeTool === 'erase') {
-      setDrawings((ds) => {
-        if (!ds.length) return ds;
-        let best = 0, bestScore = Infinity;
-        ds.forEach((d, i) => {
-          const score = Math.abs(d.p1 - price) + Math.abs(d.t1 - t) / 7200 + (d.p2 ? Math.abs(d.p2 - price) * 0.5 : 0);
-          if (score < bestScore) { bestScore = score; best = i; }
-        });
-        return ds.filter((_, i) => i !== best);
-      });
-      return;
-    }
-    const kind = TOOL_META[activeTool]?.kind;
-    if (kind === 'zone') {
-      if (!pending) {
-        setPending({ t, p: price });
-      } else {
-        setDrawings((ds) => [...ds, {
-          id: uid(), tool: activeTool as Drawing['tool'],
-          p1: pending.p, p2: price, t1: Math.min(pending.t, t), t2: Math.max(pending.t, t),
-        }]);
-        setPending(null);
-      }
-    } else if (kind === 'hline' || kind === 'label' || kind === 'vline') {
-      setDrawings((ds) => [...ds, { id: uid(), tool: activeTool as Drawing['tool'], p1: price, t1: t }]);
-    }
-  };
 
   const analysis: DayAnalysis | null = useMemo(
     () => (all.length >= 10 ? analyzeDay(all, effDayStart) : null),
@@ -221,7 +174,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V11</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V12</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -395,15 +348,15 @@ export default function App() {
               <span dir="ltr" className="mr-auto rounded-sm bg-emerald-400/10 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-300">{dataInfo}</span>
             )}
           </div>
-          {/* شريط الطبقات التلقائية + أدوات الرسم اليدوي */}
+          {/* شريط الطبقات التلقائية */}
           {chartView === 'engine' && (
-            <div className="shrink-0 space-y-1 px-3 pt-1.5">
-              {/* كشف تلقائي بنقرة واحدة */}
+            <div className="shrink-0 px-3 pt-1.5">
               <div className="flex items-center gap-1 overflow-x-auto text-[9.5px] font-bold">
                 <span className="shrink-0 text-slate-500">كشف تلقائي:</span>
                 {([
                   ['fvg', 'FVG', '#64748b'],
                   ['bos', 'BOS / CHoCH', '#e879f9'],
+                  ['ob', 'أوردر بلوك', '#34d399'],
                   ['liq', 'مناطق السيولة', '#fbbf24'],
                   ['sess', 'افتتاح/إغلاق', '#f97316'],
                 ] as const).map(([k, label, col]) => (
@@ -420,40 +373,6 @@ export default function App() {
                     {layers[k] ? '◉ ' : '○ '}{label}
                   </button>
                 ))}
-              </div>
-              {/* رسم يدوي */}
-              <div className="flex items-center gap-1 overflow-x-auto text-[9.5px] font-bold" dir="ltr">
-                <span className="shrink-0 text-slate-500" dir="rtl">يدوي:</span>
-                {(Object.keys(TOOL_META) as (keyof typeof TOOL_META)[]).map((k) => (
-                  <button
-                    key={k}
-                    onClick={() => { setActiveTool(activeTool === k ? 'none' : (k as ToolId)); setPending(null); }}
-                    className="shrink-0 rounded-sm border px-2 py-1 transition active:scale-95"
-                    style={{
-                      borderColor: activeTool === k ? TOOL_META[k].color : '#1a2540',
-                      color: activeTool === k ? TOOL_META[k].color : '#8b98b8',
-                      background: activeTool === k ? TOOL_META[k].color + '18' : 'transparent',
-                    }}
-                  >
-                    {TOOL_META[k].label}
-                  </button>
-                ))}
-              <button
-                onClick={() => { setActiveTool(activeTool === 'erase' ? 'none' : 'erase'); setPending(null); }}
-                className={`shrink-0 rounded-sm border px-2 py-1 transition ${activeTool === 'erase' ? 'border-red-400 bg-red-400/15 text-red-300' : 'border-[#1a2540] text-slate-500 hover:text-white'}`}
-              >
-                ⌫ ممحاة
-              </button>
-              <button
-                onClick={() => { setDrawings([]); setPending(null); }}
-                className="shrink-0 rounded-sm border border-[#1a2540] px-2 py-1 text-slate-500 transition hover:text-red-300"
-              >
-                مسح الكل ({drawings.length})
-              </button>
-              {pending && <span className="shrink-0 px-1 text-amber-300">← انقر النقطة الثانية لإكمال المنطقة</span>}
-              {activeTool !== 'none' && activeTool !== 'erase' && !pending && TOOL_META[activeTool]?.kind !== 'zone' && (
-                <span className="shrink-0 px-1 text-cyan-300">← انقر على الشارت لوضع {TOOL_META[activeTool]?.label}</span>
-              )}
               </div>
             </div>
           )}
@@ -481,10 +400,7 @@ export default function App() {
                     analysis={analysis}
                     showAll={displayCandles}
                     tfSeconds={tf}
-                    drawings={drawings}
                     layers={layers}
-                    activeTool={activeTool}
-                    onChartClick={handleChartClick}
                   />
                 )
               ) : (

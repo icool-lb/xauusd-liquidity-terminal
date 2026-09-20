@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createChart,
   CandlestickSeries,
@@ -9,12 +9,11 @@ import {
   ColorType,
 } from 'lightweight-charts';
 import {
-  KILL_ZONES, detectFVGs, computeOTE, detectStructure, autoLiquidityZones,
+  KILL_ZONES, detectFVGs, computeOTE, detectStructure, autoLiquidityZones, detectOrderBlocks,
   type DayAnalysis, type Candle,
 } from '../lib/engine';
-import { TOOL_META, type Drawing, type ToolId } from '../lib/drawings';
 
-export interface AutoLayers { fvg: boolean; bos: boolean; liq: boolean; sess: boolean }
+export interface AutoLayers { fvg: boolean; bos: boolean; liq: boolean; sess: boolean; ob: boolean }
 
 const C = {
   bg: '#050810', grid: '#101830',
@@ -27,20 +26,18 @@ interface Props {
   analysis: DayAnalysis | null;
   showAll: Candle[];        // شموع العرض (بالفريم المختار)
   tfSeconds: number;
-  drawings: Drawing[];
   layers: AutoLayers;
-  activeTool: ToolId;
-  onChartClick: (t: number, p: number) => void;
 }
 
-export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawings, layers, activeTool, onChartClick }: Props) {
+export default function GoldChart({ candles, analysis, showAll, tfSeconds, layers }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const drawRef = useRef<() => void>(() => {});
-  const stateRef = useRef({ analysis, drawings, layers, tfSeconds });
-  stateRef.current = { analysis, drawings, layers, tfSeconds };
+  const stateRef = useRef({ analysis, layers, tfSeconds });
+  stateRef.current = { analysis, layers, tfSeconds };
+  const [full, setFull] = useState(false);
 
   // ---------- إنشاء الشارت ----------
   useEffect(() => {
@@ -59,8 +56,9 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
         vertLine: { color: '#2a3a5f', labelBackgroundColor: '#1a2540' },
         horzLine: { color: '#2a3a5f', labelBackgroundColor: '#1a2540' },
       },
-      handleScroll: true,
-      handleScale: true,
+      handleScroll: { pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+      kineticScroll: { touch: true, mouse: true },
       width: ref.current.clientWidth,
       height: ref.current.clientHeight,
     });
@@ -72,20 +70,6 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
     chartRef.current = chart;
     seriesRef.current = series;
 
-    // نقرة على الشارت → تحويل الإحداثيات إلى وقت/سعر
-    chart.subscribeCrosshairMove(() => {});
-    const el = ref.current;
-    const onClick = (ev: MouseEvent) => {
-      const rect = el.getBoundingClientRect();
-      const cx = ev.clientX - rect.left;
-      const cy = ev.clientY - rect.top;
-      const t = chart.timeScale().coordinateToTime(cx);
-      const p = series.coordinateToPrice(cy);
-      if (t === null || p === null) return;
-      onChartClickRef.current(t as number, p as number);
-    };
-    el.addEventListener('click', onClick);
-
     const ro = new ResizeObserver(() => {
       if (!ref.current || !canvasRef.current) return;
       chart.applyOptions({ width: ref.current.clientWidth, height: ref.current.clientHeight });
@@ -94,12 +78,9 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
     });
     ro.observe(ref.current);
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => drawRef.current());
-    return () => { el.removeEventListener('click', onClick); ro.disconnect(); chart.remove(); };
+    return () => { ro.disconnect(); chart.remove(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const onChartClickRef = useRef(onChartClick);
-  onChartClickRef.current = onChartClick;
 
   const syncCanvas = () => {
     const cv = canvasRef.current, host = ref.current;
@@ -111,12 +92,12 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
     cv.style.height = host.clientHeight + 'px';
   };
 
-  // ---------- طبقة الرسم (جلسات + مناطق تلقائية + رسوم المستخدم) ----------
+  // ---------- طبقة الرسم (جلسات + طبقات تلقائية) ----------
   useEffect(() => {
     drawRef.current = () => {
       const chart = chartRef.current, series = seriesRef.current, cv = canvasRef.current;
       if (!chart || !series || !cv) return;
-      const { analysis: an, drawings: drs, layers: ly } = stateRef.current;
+      const { analysis: an, layers: ly, tfSeconds: tf } = stateRef.current;
       const ctx = cv.getContext('2d');
       if (!ctx) return;
       const dpr = window.devicePixelRatio || 1;
@@ -137,7 +118,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
       if (an && an.candles.length) {
         const day = an.candles;
         const t0 = day[0].time, t1 = day[day.length - 1].time;
-        const x0 = x(t0), xEnd = x(t1 + 8 * 900) ?? W;
+        const x0 = x(t0), xEnd = x(t1 + 8 * tf) ?? W;
 
         const band = (a: number, b: number, color: string, alpha: string) => {
           const xa = x(a) ?? x0 ?? 0;
@@ -223,7 +204,27 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
             ctx.fillText(m.kind, xx + 16, m.dir === 'up' ? yy - 4 : yy + 10);
           }
         }
-        // 2) مناطق السيولة التلقائية
+        // 2) الأوردر بلوك التلقائية
+        if (ly.ob) {
+          for (const ob of detectOrderBlocks(day)) {
+            if (ob.broken) continue;
+            const yT = y(ob.top), yB = y(ob.bottom);
+            if (yT === null || yB === null) continue;
+            const x1 = x(ob.time) ?? 0;
+            const x2 = ob.to ? (x(ob.to) ?? Math.min(W, xEnd)) : Math.min(W, xEnd);
+            const col = ob.dir === 'up' ? '#34d399' : '#f87171';
+            ctx.fillStyle = col + (ob.to ? '0d' : '1f');
+            ctx.fillRect(x1, yT, x2 - x1, Math.max(yB - yT, 3));
+            ctx.strokeStyle = col + (ob.to ? '44' : 'aa');
+            ctx.setLineDash(ob.to ? [2, 3] : []);
+            ctx.strokeRect(x1, yT, x2 - x1, Math.max(yB - yT, 3));
+            ctx.setLineDash([]);
+            ctx.fillStyle = col;
+            ctx.font = 'bold 8.5px JetBrains Mono';
+            ctx.fillText(ob.dir === 'up' ? '+OB' : '-OB', x1 + 3, yT + 10);
+          }
+        }
+        // 3) مناطق السيولة التلقائية
         if (ly.liq) {
           for (const zn of autoLiquidityZones(an)) {
             const yT = y(zn.top), yB = y(zn.bottom);
@@ -242,7 +243,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
             ctx.fillText(zn.label, x1 + 4, yT + 10);
           }
         }
-        // 3) خطوط افتتاح/إغلاق الجلسات
+        // 4) خطوط افتتاح/إغلاق الجلسات
         if (ly.sess) {
           const marks: [number, string, string][] = [
             [t0, 'افتتاح اليوم', '#22d3ee'],
@@ -264,7 +265,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
         }
 
         const now = Math.floor(Date.now() / 1000);
-        if (now >= t0 && now <= t1 + 8 * 900) {
+        if (now >= t0 && now <= t1 + 8 * tf) {
           const xn = x(now);
           if (xn !== null) {
             ctx.strokeStyle = '#fbbf2455';
@@ -272,57 +273,6 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
             ctx.beginPath(); ctx.moveTo(xn, 0); ctx.lineTo(xn, H); ctx.stroke();
             ctx.setLineDash([]);
           }
-        }
-      }
-
-      // ===== رسوم المستخدم =====
-      for (const d of drs) {
-        const meta = TOOL_META[d.tool];
-        if (!meta) continue;
-        if (meta.kind === 'hline') {
-          const yy = y(d.p1);
-          if (yy === null) continue;
-          ctx.strokeStyle = meta.color;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke();
-          ctx.fillStyle = meta.color;
-          ctx.font = 'bold 9px JetBrains Mono';
-          ctx.fillText(`${meta.label} ${d.p1.toFixed(2)}`, 6, yy - 3);
-        } else if (meta.kind === 'zone') {
-          const y1 = y(d.p1), y2 = y(d.p2 ?? d.p1);
-          if (y1 === null || y2 === null) continue;
-          const x1 = x(d.t1) ?? 0;
-          const x2 = d.t2 ? (x(d.t2) ?? W) : W;
-          const top = Math.min(y1, y2), h = Math.max(Math.abs(y2 - y1), 3);
-          ctx.fillStyle = meta.color + '1f';
-          ctx.fillRect(x1, top, x2 - x1, h);
-          ctx.strokeStyle = meta.color + '99';
-          ctx.setLineDash([4, 3]);
-          ctx.strokeRect(x1, top, x2 - x1, h);
-          ctx.setLineDash([]);
-          ctx.fillStyle = meta.color;
-          ctx.font = 'bold 9px JetBrains Mono';
-          ctx.fillText(meta.label, x1 + 4, top + 11);
-        } else if (meta.kind === 'label') {
-          const xx = x(d.t1), yy = y(d.p1);
-          if (xx === null || yy === null) continue;
-          ctx.fillStyle = meta.color;
-          ctx.beginPath();
-          ctx.arc(xx, yy, 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.font = 'bold 10px JetBrains Mono';
-          ctx.fillText(meta.label, xx + 6, yy - 5);
-        } else if (meta.kind === 'vline') {
-          const xx = x(d.t1);
-          if (xx === null) continue;
-          ctx.strokeStyle = meta.color;
-          ctx.setLineDash([6, 4]);
-          ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.moveTo(xx, 0); ctx.lineTo(xx, H); ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.fillStyle = meta.color;
-          ctx.font = 'bold 9px JetBrains Mono';
-          ctx.fillText(meta.label, xx + 4, 24);
         }
       }
     };
@@ -397,11 +347,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
     }
     const pm = createSeriesMarkers(series, markers);
 
-    if (analysis && analysis.candles.length) {
-      const first = snap(analysis.candles[0].time);
-      const last = snap(analysis.candles[analysis.candles.length - 1].time + 8 * tfSeconds);
-      chart.timeScale().setVisibleRange({ from: first, to: last });
-    }
+    fitDay();
     requestAnimationFrame(() => drawRef.current());
     setTimeout(() => drawRef.current(), 100);
 
@@ -412,19 +358,58 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAll, analysis, candles, tfSeconds]);
 
-  // إعادة رسم الرسوم اليدوية عند تغيّرها
+  const fitDay = () => {
+    const chart = chartRef.current;
+    const an = stateRef.current.analysis;
+    const tf = stateRef.current.tfSeconds;
+    if (!chart || !an || !an.candles.length) return;
+    const first = Math.floor(an.candles[0].time / tf) * tf;
+    const last = Math.floor((an.candles[an.candles.length - 1].time + 8 * tf) / tf) * tf;
+    chart.timeScale().setVisibleRange({ from: first as UTCTimestamp, to: last as UTCTimestamp });
+  };
+
+  // إعادة رسم الطبقات عند تغيّرها
   useEffect(() => {
     drawRef.current();
-  }, [drawings]);
+  }, [layers]);
+
+  // زوم دقيق حول مركز الشاشة عبر النطاق المنطقي
+  const zoom = (dir: 1 | -1) => {
+    const ts = chartRef.current?.timeScale();
+    if (!ts) return;
+    const r = ts.getVisibleLogicalRange();
+    if (!r) return;
+    const center = (r.from + r.to) / 2;
+    const half = Math.max(3, ((r.to - r.from) / 2) * (dir === 1 ? 0.65 : 1 / 0.65));
+    ts.setVisibleLogicalRange({ from: center - half, to: center + half });
+  };
+
+  const ctrlBtn =
+    'flex h-7 w-7 items-center justify-center rounded-sm border border-[#2a3a5f] bg-[#0c1220e6] text-[13px] font-bold text-slate-300 transition hover:border-amber-400/60 hover:text-amber-300 active:scale-90';
 
   return (
     <div
       ref={ref}
-      className="relative h-full w-full"
+      className={full ? 'fixed inset-0 z-[100] bg-[#050810]' : 'relative h-full w-full'}
       dir="ltr"
-      style={{ cursor: activeTool !== 'none' ? 'crosshair' : 'default' }}
     >
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 z-10" />
+      {/* أدوات الزوم وملء الشاشة */}
+      <div className="absolute left-2 top-2 z-20 flex flex-col gap-1">
+        <button className={ctrlBtn} title="تقريب" onClick={() => zoom(1)}>＋</button>
+        <button className={ctrlBtn} title="إبعاد" onClick={() => zoom(-1)}>－</button>
+        <button className={ctrlBtn} title="ملاءمة يوم التحليل" onClick={fitDay}>⤢</button>
+        <button
+          className={ctrlBtn}
+          title="الذهاب لآخر سعر"
+          onClick={() => chartRef.current?.timeScale().scrollToRealTime()}
+        >»</button>
+        <button
+          className={`${ctrlBtn} ${full ? 'border-amber-400 text-amber-300' : ''}`}
+          title={full ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+          onClick={() => setFull((v) => !v)}
+        >{full ? '✕' : '⛶'}</button>
+      </div>
     </div>
   );
 }

@@ -438,3 +438,120 @@ export function nextLiveCandle(prev: Candle, rnd: () => number): Candle {
 export function makeRng(seed: number) {
   return mulberry32(seed);
 }
+
+
+// ============================================================
+// ترقيات الفريق: FVG، OTE، Kill Zones، إحصاءات متقدمة
+// ============================================================
+
+export interface FVG {
+  time: number; // بداية الفجوة
+  top: number;
+  bottom: number;
+  dir: 'up' | 'down';
+  filled: boolean;
+}
+
+// فجوات القيمة العادلة: 3 شموع، فجوة بين فتيل الأولى والثالثة
+export function detectFVGs(candles: Candle[], lookback = 60): FVG[] {
+  const out: FVG[] = [];
+  const start = Math.max(2, candles.length - lookback);
+  for (let i = start; i < candles.length; i++) {
+    const a = candles[i - 2], c = candles[i];
+    if (a.high < c.low) out.push({ time: candles[i - 1].time, top: c.low, bottom: a.high, dir: 'up', filled: false });
+    if (a.low > c.high) out.push({ time: candles[i - 1].time, top: a.low, bottom: c.high, dir: 'down', filled: false });
+  }
+  // هل مُلئت الفجوة لاحقاً؟
+  for (const g of out) {
+    const idx = candles.findIndex((c) => c.time === g.time);
+    for (let i = idx + 2; i < candles.length; i++) {
+      if (g.dir === 'up' && candles[i].low <= g.bottom) { g.filled = true; break; }
+      if (g.dir === 'down' && candles[i].high >= g.top) { g.filled = true; break; }
+    }
+  }
+  return out;
+}
+
+// نطاق التداول + OTE: من طرف السحب إلى الهدف، المنطقة المثلى 62–79%
+export interface OTE {
+  eq: number;       // 50% خط التوازن
+  oteTop: number;   // 62%
+  oteBottom: number;// 79%
+  premium: boolean; // هل السعر الحالي في منطقة ممتازة أم مخفّضة
+}
+
+export function computeOTE(side: 'long' | 'short', extreme: number, target: number, current: number): OTE {
+  const range = target - extreme;
+  const eq = extreme + range * 0.5;
+  const oteTop = extreme + range * 0.62;
+  const oteBottom = extreme + range * 0.79;
+  // للشراء: الدخول المثالي في "الخصم" تحت التوازن
+  const premium = side === 'long' ? current > eq : current < eq;
+  return {
+    eq: r2(eq),
+    oteTop: r2(side === 'long' ? Math.min(oteTop, oteBottom) : Math.max(oteTop, oteBottom)),
+    oteBottom: r2(side === 'long' ? Math.max(oteTop, oteBottom) : Math.min(oteTop, oteBottom)),
+    premium,
+  };
+}
+
+// مناطق القتل (UTC): لندن 07–10، نيويورك 12–15
+export const KILL_ZONES = [
+  { start: 7, end: 10, label: 'KZ لندن' },
+  { start: 12, end: 15, label: 'KZ نيويورك' },
+];
+
+export function inKillZone(t: number): boolean {
+  const h = (t % DAY) / 3600;
+  return KILL_ZONES.some((k) => h >= k.start && h < k.end);
+}
+
+// ---------- باك تست موسّع: منحنى رأس المال + إحصاءات المستويات ----------
+export interface BacktestFull extends BacktestStats {
+  curve: { t: number; r: number }[];
+  byLevel: { label: string; signals: number; wins: number }[];
+  maxDrawdownR: number;
+  expectancyR: number;
+}
+
+export function backtestFull(all: Candle[], days: number): BacktestFull {
+  const now = Math.floor(Date.now() / 1000 / M15) * M15;
+  const todayStart = utcDayStart(now);
+  let total = 0, wins = 0, losses = 0, sumR = 0, sumRR = 0;
+  const curve: { t: number; r: number }[] = [];
+  let cum = 0, peak = 0, maxDD = 0;
+  const levelAgg = new Map<string, { signals: number; wins: number }>();
+
+  for (let d = days; d >= 0; d--) {
+    const a = analyzeDay(all, todayStart - d * DAY);
+    if (!a) continue;
+    for (const s of a.signals) {
+      if (s.status === 'active') continue;
+      total++;
+      sumRR += s.rr;
+      const r = s.pnlR ?? 0;
+      sumR += r;
+      if (r > 0) wins++; else losses++;
+      cum += r;
+      peak = Math.max(peak, cum);
+      maxDD = Math.max(maxDD, peak - cum);
+      curve.push({ t: s.time, r: r2(cum) });
+      const key = s.reason[0]?.split('(')[0]?.trim() ?? 'مستوى';
+      const agg = levelAgg.get(key) ?? { signals: 0, wins: 0 };
+      agg.signals++;
+      if (r > 0) agg.wins++;
+      levelAgg.set(key, agg);
+    }
+  }
+
+  return {
+    days: days + 1, total, wins, losses,
+    winRate: total ? Math.round((wins / total) * 100) : 0,
+    avgRR: total ? r2(sumRR / total) : 0,
+    totalR: r2(sumR),
+    curve,
+    byLevel: [...levelAgg.entries()].map(([label, v]) => ({ label, ...v })),
+    maxDrawdownR: r2(maxDD),
+    expectancyR: total ? r2(sumR / total) : 0,
+  };
+}

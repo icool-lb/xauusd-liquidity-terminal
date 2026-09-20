@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import GoldChart from './components/GoldChart';
-import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel } from './components/Panels';
+import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline } from './components/Panels';
 import {
-  generateHistory, analyzeDay, backtest, nextLiveCandle, makeRng,
-  sessionOf, type Candle, type DayAnalysis,
+  generateHistory, analyzeDay, backtestFull, nextLiveCandle, makeRng,
+  sessionOf, inKillZone, type Candle, type DayAnalysis,
 } from './lib/engine';
 import {
   loadCreds, saveCreds, loadRegion, resolveAccount, fetchHistory, fetchCurrentCandle,
@@ -113,7 +113,48 @@ export default function App() {
     () => (all.length > 200 ? analyzeDay(all, todayStart - dayOffset * DAY) : null),
     [all, todayStart, dayOffset]
   );
-  const stats = useMemo(() => (all.length > 200 ? backtest(all, DAYS - 1) : null), [all]);
+  const stats = useMemo(() => (all.length > 200 ? backtestFull(all, DAYS - 1) : null), [all]);
+
+  // تحيز H1: إغلاق آخر ساعة مقابل متوسط آخر 8 ساعات
+  const h1Bias = useMemo(() => {
+    if (all.length < 40) return 'neutral';
+    const H = 3600;
+    const agg = new Map<number, { o: number; c: number }>();
+    for (const c of all) {
+      const k = Math.floor(c.time / H) * H;
+      const e = agg.get(k);
+      if (e) e.c = c.close; else agg.set(k, { o: c.open, c: c.close });
+    }
+    const closes = [...agg.values()].map((v) => v.c).slice(-8);
+    if (closes.length < 4) return 'neutral';
+    const last = closes[closes.length - 1];
+    const avg = closes.reduce((a, b) => a + b, 0) / closes.length;
+    return last > avg * 1.0004 ? 'bullish' : last < avg * 0.9996 ? 'bearish' : 'neutral';
+  }, [all]);
+
+  // تنبيه صوتي عند اكتمال إشارة جديدة
+  const [soundOn, setSoundOn] = useState(true);
+  const [toast, setToast] = useState('');
+  const lastSigId = useRef<string>('');
+  useEffect(() => {
+    const s = analysis?.signals[0];
+    if (!s || dayOffset !== 0) return;
+    if (lastSigId.current && lastSigId.current !== s.id) {
+      setToast(`إشارة جديدة: ${s.side === 'long' ? 'شراء' : 'بيع'} @ ${s.entry} — وقف ${s.stop}`);
+      if (soundOn) {
+        try {
+          const ac = new AudioContext();
+          const osc = ac.createOscillator();
+          const gain = ac.createGain();
+          osc.connect(gain); gain.connect(ac.destination);
+          osc.frequency.value = 880; gain.gain.value = 0.08;
+          osc.start(); osc.stop(ac.currentTime + 0.35);
+        } catch { /* الصوت غير متاح */ }
+      }
+      setTimeout(() => setToast(''), 9000);
+    }
+    lastSigId.current = s.id;
+  }, [analysis, dayOffset, soundOn]);
 
   const lastPrice = all[all.length - 1]?.close ?? BASE_PRICE;
   const prevPrice = all[all.length - 2]?.close ?? lastPrice;
@@ -145,6 +186,11 @@ export default function App() {
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
           {sessionLabel[curSession]}
         </span>
+        {inKillZone(Math.floor(Date.now() / 1000)) && (
+          <span className="rounded-sm border border-red-400/50 bg-red-400/10 px-2 py-0.5 text-[10px] font-black text-red-300 animate-pulse">
+            ⚡ منطقة قتل نشطة
+          </span>
+        )}
 
         {/* مفتاح مصدر البيانات */}
         <div className="flex rounded-sm border border-[#2a3a5f] p-0.5 text-[10px] font-bold">
@@ -164,6 +210,13 @@ export default function App() {
         </div>
 
         <div className="mr-auto flex items-center gap-3">
+          <button
+            onClick={() => setSoundOn((v) => !v)}
+            title="تنبيه صوتي عند الإشارات"
+            className={`rounded-sm border px-2 py-1 text-[11px] transition ${soundOn ? 'border-amber-400/40 text-amber-300' : 'border-[#2a3a5f] text-slate-600'}`}
+          >
+            {soundOn ? '🔔' : '🔕'}
+          </button>
           <span dir="ltr" className="font-mono text-[11px] text-slate-400">
             {clock.toISOString().slice(11, 19)} <span className="text-slate-600">UTC</span>
           </span>
@@ -193,12 +246,28 @@ export default function App() {
               <span dir="ltr" className={`font-mono font-bold ${c}`}>{fmt(v as number)}</span>
             </div>
           ))}
-          <div className="mr-auto flex shrink-0 items-center gap-2">
-            <span className="text-slate-500">الاتجاه:</span>
+          <div className="mr-auto flex shrink-0 items-center gap-3">
+            <span className="text-slate-500">H1:</span>
+            <span className={`font-mono font-bold ${h1Bias === 'bullish' ? 'text-emerald-300' : h1Bias === 'bearish' ? 'text-red-300' : 'text-slate-400'}`}>
+              {h1Bias === 'bullish' ? '▲' : h1Bias === 'bearish' ? '▼' : '●'}
+            </span>
+            <span className="text-slate-500">اليومي:</span>
             <span className={`font-bold ${analysis.bias === 'bullish' ? 'text-emerald-300' : analysis.bias === 'bearish' ? 'text-red-300' : 'text-slate-400'}`}>
               {analysis.bias === 'bullish' ? '▲ صاعد (فوق الافتتاح)' : analysis.bias === 'bearish' ? '▼ هابط (تحت الافتتاح)' : '● محايد'}
             </span>
           </div>
+        </div>
+      )}
+
+      {/* ===== الخط الزمني للجلسات ===== */}
+      <div className="shrink-0 border-b border-[#1a2540] bg-[#050810] px-4">
+        <SessionTimeline />
+      </div>
+
+      {/* ===== تنبيه الإشارة ===== */}
+      {toast && (
+        <div className="absolute left-1/2 top-14 z-50 -translate-x-1/2 rounded-md border border-amber-400/60 bg-[#0c1220] px-4 py-2 text-[12px] font-bold text-amber-300 shadow-[0_0_30px_rgba(251,191,36,0.25)]">
+          ⚡ {toast}
         </div>
       )}
 
@@ -311,6 +380,8 @@ export default function App() {
           <SignalCard s={dayOffset === 0 ? sig : analysis?.signals[0] ?? null} bias={analysis?.bias ?? 'neutral'} />
           <RiskCalc s={sig} account={account} riskPct={riskPct} />
           {stats && <StatsPanel st={stats} />}
+          {stats && <EquityCurve st={stats} />}
+          {stats && <LevelStats st={stats} />}
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
             {mode === 'sim'

@@ -307,3 +307,92 @@ export function ConnectionPanel({
     </div>
   );
 }
+
+
+// ---------- منحنى رأس المال ----------
+export function EquityCurve({ st }: { st: import('../lib/engine').BacktestFull }) {
+  if (!st.curve.length) return null;
+  const W = 240, H = 56, pad = 4;
+  const rs = st.curve.map((c) => c.r);
+  const min = Math.min(0, ...rs), max = Math.max(1, ...rs);
+  const px = (i: number) => pad + (i / Math.max(1, rs.length - 1)) * (W - pad * 2);
+  const py = (r: number) => H - pad - ((r - min) / (max - min || 1)) * (H - pad * 2);
+  const pts = st.curve.map((c, i) => `${px(i)},${py(c.r)}`).join(' ');
+  const pos = st.totalR >= 0;
+  return (
+    <div>
+      <SectionTitle>منحنى الأداء التراكمي (R)</SectionTitle>
+      <div className="rounded-md border border-[#1a2540] bg-[#0c1220] p-2" dir="ltr">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+          <line x1={0} x2={W} y1={py(0)} y2={py(0)} stroke="#2a3a5f" strokeDasharray="3 3" strokeWidth="0.5" />
+          <polyline points={`${px(0)},${py(0)} ${pts}`} fill="none" stroke={pos ? '#34d399' : '#f87171'} strokeWidth="1.5" />
+          <text x={W - 4} y={py(rs[rs.length - 1]) - 3} textAnchor="end" fill={pos ? '#34d399' : '#f87171'} fontSize="9" fontFamily="JetBrains Mono">
+            {st.totalR > 0 ? '+' : ''}{st.totalR}R
+          </text>
+        </svg>
+      </div>
+      <div className="mt-1.5 grid grid-cols-2 gap-1 text-center text-[10px]">
+        <div className="rounded-sm bg-[#0c1220] p-1.5">
+          <div className="text-[8.5px] text-slate-500">التوقع لكل صفقة</div>
+          <div dir="ltr" className={`font-mono font-bold ${st.expectancyR >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{st.expectancyR}R</div>
+        </div>
+        <div className="rounded-sm bg-[#0c1220] p-1.5">
+          <div className="text-[8.5px] text-slate-500">أقصى تراجع</div>
+          <div dir="ltr" className="font-mono font-bold text-red-300">-{st.maxDrawdownR}R</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- أي مستوى يعطي أفضل الإشارات ----------
+export function LevelStats({ st }: { st: import('../lib/engine').BacktestFull }) {
+  if (!st.byLevel.length) return null;
+  return (
+    <div>
+      <SectionTitle>أداء الإشارات حسب المستوى</SectionTitle>
+      <div className="space-y-1">
+        {st.byLevel.map((l, i) => {
+          const wr = Math.round((l.wins / l.signals) * 100);
+          return (
+            <div key={i} className="flex items-center gap-2 text-[10.5px]">
+              <span className="w-28 truncate text-slate-400">{l.label}</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#111a2b]">
+                <div className={`h-full ${wr >= 50 ? 'bg-emerald-400' : 'bg-red-400'}`} style={{ width: `${wr}%` }} />
+              </div>
+              <span dir="ltr" className="w-16 text-left font-mono text-[9.5px] text-slate-500">{l.wins}/{l.signals} · {wr}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------- الخط الزمني للجلسات (24 ساعة UTC) ----------
+export function SessionTimeline() {
+  const now = new Date();
+  const pct = ((now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds()) / 86400) * 100;
+  const segs = [
+    { from: 0, to: 8, c: '#fbbf2422', label: 'آسيا' },
+    { from: 7, to: 10, c: '#22d3ee33', label: 'KZ لندن' },
+    { from: 8, to: 13, c: '#22d3ee18', label: 'لندن' },
+    { from: 12, to: 15, c: '#34d39933', label: 'KZ نيويورك' },
+    { from: 13, to: 21, c: '#34d39918', label: 'نيويورك' },
+  ];
+  return (
+    <div className="relative h-8 select-none" dir="ltr">
+      <div className="absolute inset-x-0 top-3 h-3 overflow-hidden rounded-sm bg-[#0c1220]">
+        {segs.map((s, i) => (
+          <div key={i} className="absolute top-0 h-full" style={{ left: `${(s.from / 24) * 100}%`, width: `${((s.to - s.from) / 24) * 100}%`, background: s.c }} />
+        ))}
+        <div className="absolute top-0 h-full w-px bg-amber-400" style={{ left: `${pct}%` }}>
+          <div className="absolute -top-1 right-0 h-2 w-2 translate-x-1/2 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
+        </div>
+      </div>
+      <div className="absolute inset-x-0 top-6 flex justify-between font-mono text-[8px] text-slate-600">
+        <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
+      </div>
+    </div>
+  );
+}

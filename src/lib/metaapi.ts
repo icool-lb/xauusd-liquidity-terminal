@@ -35,16 +35,29 @@ function saveRegion(r: string) {
   localStorage.setItem(LS_REGION, r);
 }
 
-const PROV = 'https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai';
-const mdHost = (region: string) => `https://mt-market-data-client-api-v1.${region}.agiliumtrade.agiliumtrade.ai`;
-const clientHost = (region: string) => `https://mt-client-api-v1.${region}.agiliumtrade.agiliumtrade.ai`;
+// MetaApi غيّرت نطاقاتها بين agiliumtrade.ai و agiliumtrade.agiliumtrade.ai
+// لذلك نجرّب الصيغتين تلقائياً حسب ما تصل إليه شبكة المستخدم
+const PROV_HOSTS = [
+  'https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai',
+  'https://mt-provisioning-api-v1.agiliumtrade.ai',
+];
+const mdHosts = (region: string) => [
+  `https://mt-market-data-client-api-v1.${region}.agiliumtrade.agiliumtrade.ai`,
+  `https://mt-market-data-client-api-v1.${region}.agiliumtrade.ai`,
+];
+const clientHosts = (region: string) => [
+  `https://mt-client-api-v1.${region}.agiliumtrade.agiliumtrade.ai`,
+  `https://mt-client-api-v1.${region}.agiliumtrade.ai`,
+];
+
+class NetworkError extends Error {}
 
 async function apiFetch(url: string, token: string) {
   let res: Response;
   try {
     res = await fetch(url, { headers: { 'auth-token': token, Accept: 'application/json' } });
   } catch {
-    throw new Error('تعذّر الوصول إلى خوادم MetaApi — تحقق من الإنترنت أو جرّب متصفح كروم');
+    throw new NetworkError(new URL(url).host);
   }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
@@ -52,16 +65,36 @@ async function apiFetch(url: string, token: string) {
       const j = await res.json();
       msg = j.message || j.error || msg;
     } catch { /* ignore */ }
-    if (res.status === 401 || res.status === 403) msg = 'رمز الوصول غير صالح — تحقق من التوكن';
+    if (res.status === 401 || res.status === 403) msg = 'رمز الوصول غير صالح — أنشئ توكناً جديداً من app.metaapi.cloud/token';
     if (res.status === 404) msg = 'الحساب أو الرمز غير موجود — تحقق من Account ID واسم الرمز';
     throw new Error(msg);
   }
   return res.json();
 }
 
+// يجرّب المضيفين بالتتابع عند فشل الشبكة فقط، ويرمي أخطاء HTTP مباشرة
+async function apiFetchHosts(hosts: string[], path: string, token: string) {
+  const attempted: string[] = [];
+  for (const h of hosts) {
+    try {
+      return await apiFetch(h + path, token);
+    } catch (e) {
+      if (e instanceof NetworkError) {
+        attempted.push(h.replace('https://', ''));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error(
+    `تعذّر الوصول إلى خوادم MetaApi (جرّبنا: ${attempted.join(' + ')}). ` +
+    'الأسباب المحتملة: حجب الشبكة/VPN، أو مانع إعلانات يحجب الطلبات، أو انقطاع الإنترنت. جرّب شبكة أخرى أو عطّل VPN.'
+  );
+}
+
 // جلب منطقة الحساب + التحقق من حالته
 export async function resolveAccount(creds: MetaApiCreds): Promise<string> {
-  const acc = await apiFetch(`${PROV}/users/current/accounts/${encodeURIComponent(creds.accountId)}`, creds.token);
+  const acc = await apiFetchHosts(PROV_HOSTS, `/users/current/accounts/${encodeURIComponent(creds.accountId)}`, creds.token);
   if (acc.state !== 'DEPLOYED') {
     throw new Error(`حالة الحساب: ${acc.state} — يجب أن يكون DEPLOYED (فعّله من لوحة MetaApi)`);
   }
@@ -89,10 +122,10 @@ function mapCandle(c: RawCandle): Candle {
 export async function fetchHistory(creds: MetaApiCreds, region: string, days: number): Promise<Candle[]> {
   const startTime = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
   const url =
-    `${mdHost(region)}/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
+    `/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
     `/historical-market-data/symbols/${encodeURIComponent(creds.symbol)}` +
     `/timeframes/15m/candles?startTime=${encodeURIComponent(startTime)}&limit=1000`;
-  const raw: RawCandle[] = await apiFetch(url, creds.token);
+  const raw: RawCandle[] = await apiFetchHosts(mdHosts(region), url, creds.token);
   if (!Array.isArray(raw) || raw.length === 0) {
     throw new Error(`لا توجد بيانات للرمز ${creds.symbol} — جرّب صيغة وسيطك (XAUUSD. / XAUUSD.pro / GOLD)`);
   }
@@ -102,16 +135,16 @@ export async function fetchHistory(creds: MetaApiCreds, region: string, days: nu
 // الشمعة الحالية (المتكونة الآن)
 export async function fetchCurrentCandle(creds: MetaApiCreds, region: string): Promise<Candle> {
   const url =
-    `${clientHost(region)}/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
+    `/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
     `/symbols/${encodeURIComponent(creds.symbol)}/current-candles/15m`;
-  const raw: RawCandle = await apiFetch(url, creds.token);
+  const raw: RawCandle = await apiFetchHosts(clientHosts(region), url, creds.token);
   return mapCandle(raw);
 }
 
 // السعر اللحظي (بديل أخف للتحديث)
 export async function fetchPrice(creds: MetaApiCreds, region: string): Promise<{ bid: number; ask: number }> {
   const url =
-    `${clientHost(region)}/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
+    `/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
     `/symbols/${encodeURIComponent(creds.symbol)}/current-price`;
-  return apiFetch(url, creds.token);
+  return apiFetchHosts(clientHosts(region), url, creds.token);
 }

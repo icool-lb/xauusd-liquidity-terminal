@@ -35,12 +35,17 @@ function saveRegion(r: string) {
   localStorage.setItem(LS_REGION, r);
 }
 
-const PROV = 'https://mt-provisioning-api-v1.agiliumtrade.ai';
-const mdHost = (region: string) => `https://mt-market-data-client-api-v1.${region}.agiliumtrade.ai`;
-const clientHost = (region: string) => `https://mt-client-api-v1.${region}.agiliumtrade.ai`;
+const PROV = 'https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai';
+const mdHost = (region: string) => `https://mt-market-data-client-api-v1.${region}.agiliumtrade.agiliumtrade.ai`;
+const clientHost = (region: string) => `https://mt-client-api-v1.${region}.agiliumtrade.agiliumtrade.ai`;
 
 async function apiFetch(url: string, token: string) {
-  const res = await fetch(url, { headers: { 'auth-token': token, Accept: 'application/json' } });
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { 'auth-token': token, Accept: 'application/json' } });
+  } catch {
+    throw new Error('تعذّر الوصول إلى خوادم MetaApi — تحقق من الإنترنت أو جرّب متصفح كروم');
+  }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try {

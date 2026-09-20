@@ -167,7 +167,7 @@ export default function App() {
   return (
     <div dir="rtl" className="flex h-screen flex-col bg-[#050810] text-slate-200 scanlines">
       {/* ===== الرأس ===== */}
-      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-[#1a2540] bg-[#080c16] px-4">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#1a2540] bg-[#080c16] px-4 py-1.5">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
@@ -272,9 +272,9 @@ export default function App() {
       )}
 
       {/* ===== الجسم ===== */}
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* العمود الأيمن: المستويات */}
-        <aside className="w-60 shrink-0 overflow-y-auto border-l border-[#1a2540] bg-[#080c16] p-3 space-y-5">
+        <aside className="order-2 w-full shrink-0 space-y-5 border-b border-[#1a2540] bg-[#080c16] p-3 lg:order-1 lg:w-60 lg:border-b-0 lg:border-l lg:overflow-y-auto">
           {mode === 'live' && (
             <ConnectionPanel
               creds={creds}
@@ -327,7 +327,7 @@ export default function App() {
         </aside>
 
         {/* المركز: الشارت + السجل */}
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="order-1 flex min-h-[520px] min-w-0 flex-1 flex-col lg:order-2 lg:min-h-0">
           <div className="flex shrink-0 items-center gap-1 px-3 pt-2 text-[10px] font-bold">
             <button
               onClick={() => setChartView('engine')}
@@ -376,7 +376,7 @@ export default function App() {
         </main>
 
         {/* العمود الأيسر: الإشارة */}
-        <aside className="w-72 shrink-0 space-y-5 overflow-y-auto border-r border-[#1a2540] bg-[#080c16] p-3">
+        <aside className="order-3 w-full shrink-0 space-y-5 border-t border-[#1a2540] bg-[#080c16] p-3 lg:w-72 lg:border-r lg:border-t-0 lg:overflow-y-auto">
           <SignalCard s={dayOffset === 0 ? sig : analysis?.signals[0] ?? null} bias={analysis?.bias ?? 'neutral'} />
           <RiskCalc s={sig} account={account} riskPct={riskPct} />
           {stats && <StatsPanel st={stats} />}

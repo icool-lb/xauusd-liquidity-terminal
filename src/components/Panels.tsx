@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { DayAnalysis, Signal, BacktestStats } from '../lib/engine';
 
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -216,6 +217,93 @@ export function SessionPlan() {
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+
+// ---------- لوحة الاتصال بـ MetaApi ----------
+export function ConnectionPanel({
+  creds,
+  status,
+  error,
+  onSave,
+  onTest,
+}: {
+  creds: { token: string; accountId: string; symbol: string } | null;
+  status: 'idle' | 'loading' | 'ok' | 'error';
+  error: string;
+  onSave: (c: { token: string; accountId: string; symbol: string }) => void;
+  onTest: () => void;
+}) {
+  const [token, setToken] = useState(creds?.token ?? '');
+  const [accountId, setAccountId] = useState(creds?.accountId ?? '');
+  const [symbol, setSymbol] = useState(creds?.symbol ?? 'XAUUSD');
+
+  const statusBadge = {
+    idle: { t: 'غير متصل', c: 'bg-slate-600/30 text-slate-400' },
+    loading: { t: 'جارٍ الاتصال…', c: 'bg-amber-400/15 text-amber-300' },
+    ok: { t: 'متصل ● بيانات حية', c: 'bg-emerald-400/15 text-emerald-300' },
+    error: { t: 'فشل الاتصال', c: 'bg-red-400/15 text-red-300' },
+  }[status];
+
+  return (
+    <div>
+      <SectionTitle>الاتصال بالبيانات الحقيقية — MetaApi</SectionTitle>
+      <div className="space-y-2 rounded-md border border-[#1a2540] bg-[#0c1220] p-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-slate-500">حساب MT4/MT5 عبر MetaApi</span>
+          <span className={`rounded-sm px-1.5 py-0.5 text-[9px] font-bold ${statusBadge.c}`}>{statusBadge.t}</span>
+        </div>
+        <label className="block text-[10px] text-slate-500">
+          API Token
+          <input
+            type="password" value={token} onChange={(e) => setToken(e.target.value)}
+            placeholder="من app.metaapi.cloud/token"
+            className="mt-0.5 w-full rounded-sm border border-[#1a2540] bg-[#080c16] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
+            dir="ltr"
+          />
+        </label>
+        <label className="block text-[10px] text-slate-500">
+          Account ID
+          <input
+            type="text" value={accountId} onChange={(e) => setAccountId(e.target.value)}
+            placeholder="مثال: 865d3a4d-3803-486d-…"
+            className="mt-0.5 w-full rounded-sm border border-[#1a2540] bg-[#080c16] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
+            dir="ltr"
+          />
+        </label>
+        <label className="block text-[10px] text-slate-500">
+          رمز الذهب عند وسيطك
+          <input
+            type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)}
+            placeholder="XAUUSD / XAUUSD. / GOLD"
+            className="mt-0.5 w-full rounded-sm border border-[#1a2540] bg-[#080c16] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
+            dir="ltr"
+          />
+        </label>
+        <div className="flex gap-1.5 pt-1">
+          <button
+            onClick={() => onSave({ token: token.trim(), accountId: accountId.trim(), symbol: symbol.trim() || 'XAUUSD' })}
+            className="flex-1 rounded-sm bg-amber-400 px-2 py-1.5 text-[11px] font-black text-black transition hover:bg-amber-300 active:scale-95"
+          >
+            حفظ واتصال
+          </button>
+          <button
+            onClick={onTest}
+            className="rounded-sm border border-[#2a3a5f] px-2.5 py-1.5 text-[11px] font-bold text-slate-300 transition hover:bg-[#111a2b] active:scale-95"
+          >
+            اختبار
+          </button>
+        </div>
+        {status === 'error' && (
+          <p className="rounded-sm bg-red-400/10 p-1.5 text-[10px] leading-relaxed text-red-300">{error}</p>
+        )}
+        <p className="text-[9px] leading-relaxed text-slate-600">
+          التوكن يُحفظ في متصفحك فقط (localStorage) ولا يُرسل لأي جهة سوى خوادم MetaApi الرسمية.
+          حسابك يجب أن يكون بحالة DEPLOYED ومتصلاً بالوسيط.
+        </p>
+      </div>
     </div>
   );
 }

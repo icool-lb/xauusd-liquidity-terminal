@@ -2,18 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import GoldChart from './components/GoldChart';
 import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline } from './components/Panels';
 import {
-  generateHistory, analyzeDay, backtestFull, nextLiveCandle, makeRng,
-  sessionOf, inKillZone, aggregate, type Candle, type DayAnalysis,
+  analyzeDay, backtestFull, sessionOf, inKillZone, aggregate,
+  type Candle, type DayAnalysis,
 } from './lib/engine';
 import {
-  loadCreds, saveCreds, loadRegion, resolveAccount, fetchHistory, fetchCurrentCandle,
+  loadCreds, saveCreds, loadRegion, resolveAccount, fetchHistory, fetchCurrentCandle, fetchPrice,
   type MetaApiCreds,
 } from './lib/metaapi';
 import { TOOL_META, loadDrawings, saveDrawings, uid, type Drawing, type ToolId } from './lib/drawings';
 
 const DAY = 24 * 3600;
-const BASE_PRICE = 4378;
-const DAYS = 9;
+const BT_DAYS = 25; // أيام الباك-تيست من التاريخ المحمَّل (30 يوماً)
 
 const sessionLabel: Record<string, string> = {
   asia: 'جلسة آسيا', london: 'جلسة لندن', ny: 'جلسة نيويورك', off: 'خارج الجلسات',
@@ -24,21 +23,15 @@ const sessionColor: Record<string, string> = {
 };
 
 export default function App() {
-  // ---- مصدر البيانات ----
-  const [mode, setMode] = useState<'sim' | 'live'>('sim');
+  // ---- بيانات حقيقية فقط (MetaApi) ----
   const [chartView, setChartView] = useState<'engine' | 'tv'>('engine');
   const [creds, setCreds] = useState<MetaApiCreds | null>(() => loadCreds());
   const [liveStatus, setLiveStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [liveError, setLiveError] = useState('');
   const [liveData, setLiveData] = useState<Candle[]>([]);
-  const regionRef = useRef<string>(loadRegion());
-
-  // ---- المحاكاة ----
-  const [seed, setSeed] = useState(20260920);
-  const simHistory = useMemo(() => generateHistory(DAYS, BASE_PRICE, seed), [seed]);
-  const [simLive, setSimLive] = useState<Candle[]>([]);
   const [dataInfo, setDataInfo] = useState('');
-  useEffect(() => { setSimLive([]); }, [seed]);
+  const [priceWarn, setPriceWarn] = useState('');
+  const regionRef = useRef<string>(loadRegion());
 
   // ---- مشترك ----
   const [dayOffset, setDayOffset] = useState(0);
@@ -46,27 +39,16 @@ export default function App() {
   const [riskPct, setRiskPct] = useState(1);
   const [clock, setClock] = useState(new Date());
 
-  // نبضة الساعة + محاكاة التدفق اللحظي (وضع المحاكاة فقط)
   useEffect(() => {
-    const id = setInterval(() => {
-      setClock(new Date());
-      if (mode !== 'sim') return;
-      setSimLive((prev) => {
-        const last = prev.length ? prev[prev.length - 1] : simHistory[simHistory.length - 1];
-        const rnd = makeRng(Math.floor(Math.random() * 1e9));
-        if (prev.length % 8 === 7) return [...prev, nextLiveCandle(last, rnd)];
-        const jitter = nextLiveCandle(last, rnd);
-        const updated = { ...last, close: jitter.close, high: Math.max(last.high, jitter.high), low: Math.min(last.low, jitter.low) };
-        return prev.length ? [...prev.slice(0, -1), updated] : [updated];
-      });
-    }, 3000);
+    const id = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(id);
-  }, [simHistory, mode]);
+  }, []);
 
-  // تحميل البيانات الحقيقية عند تفعيل الوضع الحي
+  // جلب 30 يوماً من شموع M15 + التحقق من تطابق السعر مع اللحظي
   const connectLive = async (c: MetaApiCreds) => {
     setLiveStatus('loading');
     setLiveError('');
+    setPriceWarn('');
     try {
       const region = await resolveAccount(c);
       regionRef.current = region;
@@ -75,8 +57,19 @@ export default function App() {
       if (candles.length) {
         const from = new Date(candles[0].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
         const to = new Date(candles[candles.length - 1].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
-        setDataInfo(`${candles.length} شمعة · ${from} ← ${to} UTC`);
+        setDataInfo(`${c.symbol} · ${candles.length} شمعة · ${from} ← ${to} UTC`);
       } else setDataInfo('');
+      // فحص سلامة: آخر إغلاق تاريخي يجب أن يطابق السعر اللحظي للوسيط
+      try {
+        const px = await fetchPrice(c, region);
+        const last = candles[candles.length - 1]?.close;
+        if (last && px?.bid && Math.abs(last - px.bid) / px.bid > 0.015) {
+          setPriceWarn(
+            `آخر إغلاق تاريخي (${last.toFixed(2)}) يختلف عن السعر اللحظي لوسيطك (${px.bid.toFixed(2)}) — ` +
+            `تأكد أن «${c.symbol}» هو رمز الذهب الفوري الصحيح لدى وسيطك (جرّب XAUUSD / XAUUSD. / GOLD)`
+          );
+        }
+      } catch { /* فحص اختياري */ }
       setLiveStatus('ok');
     } catch (e) {
       setLiveStatus('error');
@@ -85,16 +78,14 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (mode === 'live') {
-      if (creds?.token && creds?.accountId) connectLive(creds);
-      else setLiveStatus('idle');
-    }
+    if (creds?.token && creds?.accountId) connectLive(creds);
+    else setLiveStatus('idle');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, creds]);
+  }, [creds]);
 
-  // تحديث الشمعة الحالية كل 15 ثانية في الوضع الحي
+  // تحديث الشمعة الحالية كل 15 ثانية
   useEffect(() => {
-    if (mode !== 'live' || liveStatus !== 'ok' || !creds) return;
+    if (liveStatus !== 'ok' || !creds) return;
     const id = setInterval(async () => {
       try {
         const cc = await fetchCurrentCandle(creds, regionRef.current);
@@ -108,27 +99,23 @@ export default function App() {
       } catch { /* تجاهل أخطاء النبضة الواحدة */ }
     }, 15000);
     return () => clearInterval(id);
-  }, [mode, liveStatus, creds]);
+  }, [liveStatus, creds]);
 
-  const all = useMemo(
-    () => (mode === 'sim' ? [...simHistory, ...simLive] : liveData),
-    [mode, simHistory, simLive, liveData]
-  );
+  const all = liveData;
 
   // ---- أدوات الرسم والفريمات ----
-  const [tf, setTf] = useState(900); // ثواني
+  const [tf, setTf] = useState(900); // بالثواني
   const [layers, setLayers] = useState({ fvg: true, bos: true, liq: true, sess: false });
   const [activeTool, setActiveTool] = useState<ToolId>('none');
   const [pending, setPending] = useState<{ t: number; p: number } | null>(null);
   const [drawings, setDrawings] = useState<Drawing[]>([]);
 
   const todayStart = Math.floor(Date.now() / 1000 / DAY) * DAY;
-  // إذا كانت البيانات راكدة (اشتراك مجاني)، حلّل آخر يوم متاح فعلياً
   const lastDataDay = all.length ? Math.floor(all[all.length - 1].time / DAY) * DAY : todayStart;
   const effDayStart = Math.min(todayStart - dayOffset * DAY, lastDataDay);
-  const dataStale = all.length > 0 && todayStart - lastDataDay >= DAY;
+  const dataStale = all.length > 0 && todayStart - lastDataDay >= DAY * 2;
   const dayKey = new Date(effDayStart * 1000).toISOString().slice(0, 10);
-  const symbolKey = (mode === 'live' ? creds?.symbol : null) ?? 'SIM';
+  const symbolKey = creds?.symbol ?? 'XAUUSD';
 
   // تحميل/حفظ الرسوم لكل يوم ورمز
   useEffect(() => {
@@ -145,7 +132,6 @@ export default function App() {
     if (activeTool === 'erase') {
       setDrawings((ds) => {
         if (!ds.length) return ds;
-        // احذف الأقرب لنقطة النقر (مسافة مركّبة سعر+زمن)
         let best = 0, bestScore = Infinity;
         ds.forEach((d, i) => {
           const score = Math.abs(d.p1 - price) + Math.abs(d.t1 - t) / 7200 + (d.p2 ? Math.abs(d.p2 - price) * 0.5 : 0);
@@ -166,17 +152,16 @@ export default function App() {
         }]);
         setPending(null);
       }
-    } else if (kind === 'hline' || kind === 'label') {
-      setDrawings((ds) => [...ds, { id: uid(), tool: activeTool as Drawing['tool'], p1: price, t1: t }]);
-    } else if (kind === 'vline') {
+    } else if (kind === 'hline' || kind === 'label' || kind === 'vline') {
       setDrawings((ds) => [...ds, { id: uid(), tool: activeTool as Drawing['tool'], p1: price, t1: t }]);
     }
   };
+
   const analysis: DayAnalysis | null = useMemo(
     () => (all.length >= 10 ? analyzeDay(all, effDayStart) : null),
     [all, effDayStart]
   );
-  const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, DAYS - 1) : null), [all]);
+  const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, BT_DAYS) : null), [all]);
   const displayCandles = useMemo(() => aggregate(all, tf), [all, tf]);
 
   // تحيز H1: إغلاق آخر ساعة مقابل متوسط آخر 8 ساعات
@@ -220,8 +205,8 @@ export default function App() {
     lastSigId.current = s.id;
   }, [analysis, dayOffset, soundOn]);
 
-  const lastPrice = all[all.length - 1]?.close ?? BASE_PRICE;
-  const prevPrice = all[all.length - 2]?.close ?? lastPrice;
+  const lastPrice = all.length ? all[all.length - 1].close : 0;
+  const prevPrice = all.length > 1 ? all[all.length - 2].close : lastPrice;
   const delta = lastPrice - prevPrice;
   const curSession = sessionOf(Math.floor(Date.now() / 1000));
   const sig = analysis?.signals[0] ?? null;
@@ -236,15 +221,17 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V9</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V10</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
         <div dir="ltr" className="flex items-baseline gap-2 font-mono">
-          <span className="text-lg font-black text-white">{fmt(lastPrice)}</span>
-          <span className={`text-[11px] font-bold ${delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(2)}
-          </span>
+          <span className="text-lg font-black text-white">{lastPrice ? fmt(lastPrice) : '—'}</span>
+          {lastPrice > 0 && (
+            <span className={`text-[11px] font-bold ${delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(2)}
+            </span>
+          )}
         </div>
         <span className={`flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-bold ${sessionColor[curSession]}`}>
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
@@ -255,23 +242,12 @@ export default function App() {
             ⚡ منطقة قتل نشطة
           </span>
         )}
-
-        {/* مفتاح مصدر البيانات */}
-        <div className="flex rounded-sm border border-[#2a3a5f] p-0.5 text-[10px] font-bold">
-          <button
-            onClick={() => setMode('sim')}
-            className={`rounded-sm px-2.5 py-1 transition ${mode === 'sim' ? 'bg-amber-400 text-black' : 'text-slate-400 hover:text-white'}`}
-          >
-            محاكاة تدريبية
-          </button>
-          <button
-            onClick={() => setMode('live')}
-            className={`flex items-center gap-1.5 rounded-sm px-2.5 py-1 transition ${mode === 'live' ? 'bg-emerald-400 text-black' : 'text-slate-400 hover:text-white'}`}
-          >
-            {mode === 'live' && liveStatus === 'ok' && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-black" />}
-            بيانات حقيقية
-          </button>
-        </div>
+        {liveStatus === 'ok' && (
+          <span className="flex items-center gap-1.5 rounded-sm border border-emerald-400/40 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+            بيانات حقيقية · مباشر
+          </span>
+        )}
 
         <div className="mr-auto flex items-center gap-3">
           <button
@@ -284,14 +260,6 @@ export default function App() {
           <span dir="ltr" className="font-mono text-[11px] text-slate-400">
             {clock.toISOString().slice(11, 19)} <span className="text-slate-600">UTC</span>
           </span>
-          {mode === 'sim' && (
-            <button
-              onClick={() => setSeed(Math.floor(Math.random() * 1e9))}
-              className="rounded-sm border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-[11px] font-bold text-amber-300 transition hover:bg-amber-400/20 active:scale-95"
-            >
-              ⟳ سيناريو جديد
-            </button>
-          )}
         </div>
       </header>
 
@@ -337,25 +305,26 @@ export default function App() {
 
       {/* ===== الجسم ===== */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        {/* العمود الأيمن: المستويات */}
+        {/* العمود الأيمن: الاتصال + المستويات */}
         <aside className="order-2 w-full shrink-0 space-y-5 border-b border-[#1a2540] bg-[#080c16] p-3 lg:order-1 lg:w-60 lg:border-b-0 lg:border-l lg:overflow-y-auto">
-          {mode === 'live' && (
-            <ConnectionPanel
-              creds={creds}
-              status={liveStatus}
-              error={liveError}
-              onSave={(c) => { saveCreds(c); setCreds(c); }}
-              onTest={() => creds && connectLive(creds)}
-            />
-          )}
-          {mode === 'live' && liveStatus === 'ok' && dataInfo && (
+          <ConnectionPanel
+            creds={creds}
+            status={liveStatus}
+            error={liveError}
+            onSave={(c) => { saveCreds(c); setCreds(c); }}
+            onTest={() => creds && connectLive(creds)}
+          />
+          {liveStatus === 'ok' && dataInfo && (
             <p dir="ltr" className="rounded-sm bg-emerald-400/5 px-2 py-1 text-center font-mono text-[9.5px] text-emerald-300/80">{dataInfo}</p>
+          )}
+          {priceWarn && (
+            <p className="rounded-sm border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-[10px] leading-relaxed text-amber-300">{priceWarn}</p>
           )}
           {/* اختيار اليوم */}
           <div>
             <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">يوم التحليل</div>
             <div className="grid grid-cols-5 gap-1">
-              {[0, 1, 2, 3, 4].map((d) => (
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
                 <button
                   key={d}
                   onClick={() => setDayOffset(d)}
@@ -422,7 +391,7 @@ export default function App() {
                 ))}
               </div>
             )}
-            {mode === 'live' && dataInfo && (
+            {liveStatus === 'ok' && dataInfo && (
               <span dir="ltr" className="mr-auto rounded-sm bg-emerald-400/10 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-300">{dataInfo}</span>
             )}
           </div>
@@ -455,20 +424,20 @@ export default function App() {
               {/* رسم يدوي */}
               <div className="flex items-center gap-1 overflow-x-auto text-[9.5px] font-bold" dir="ltr">
                 <span className="shrink-0 text-slate-500" dir="rtl">يدوي:</span>
-              {(Object.keys(TOOL_META) as (keyof typeof TOOL_META)[]).map((k) => (
-                <button
-                  key={k}
-                  onClick={() => { setActiveTool(activeTool === k ? 'none' : (k as ToolId)); setPending(null); }}
-                  className="shrink-0 rounded-sm border px-2 py-1 transition active:scale-95"
-                  style={{
-                    borderColor: activeTool === k ? TOOL_META[k].color : '#1a2540',
-                    color: activeTool === k ? TOOL_META[k].color : '#8b98b8',
-                    background: activeTool === k ? TOOL_META[k].color + '18' : 'transparent',
-                  }}
-                >
-                  {TOOL_META[k].label}
-                </button>
-              ))}
+                {(Object.keys(TOOL_META) as (keyof typeof TOOL_META)[]).map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => { setActiveTool(activeTool === k ? 'none' : (k as ToolId)); setPending(null); }}
+                    className="shrink-0 rounded-sm border px-2 py-1 transition active:scale-95"
+                    style={{
+                      borderColor: activeTool === k ? TOOL_META[k].color : '#1a2540',
+                      color: activeTool === k ? TOOL_META[k].color : '#8b98b8',
+                      background: activeTool === k ? TOOL_META[k].color + '18' : 'transparent',
+                    }}
+                  >
+                    {TOOL_META[k].label}
+                  </button>
+                ))}
               <button
                 onClick={() => { setActiveTool(activeTool === 'erase' ? 'none' : 'erase'); setPending(null); }}
                 className={`shrink-0 rounded-sm border px-2 py-1 transition ${activeTool === 'erase' ? 'border-red-400 bg-red-400/15 text-red-300' : 'border-[#1a2540] text-slate-500 hover:text-white'}`}
@@ -489,20 +458,20 @@ export default function App() {
             </div>
           )}
           {/* تحذير البيانات الراكدة */}
-          {mode === 'live' && dataStale && (
+          {liveStatus === 'ok' && dataStale && (
             <div className="mx-3 mt-1.5 shrink-0 rounded-sm border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] leading-relaxed text-amber-300">
-              ⚠️ بيانات حسابك التاريخية تتوقف عند {new Date(lastDataDay * 1000).toISOString().slice(0, 10)} (حد الباقة المجانية في MetaApi) — المنصة تحلل آخر يوم متاح، وستتراكم البيانات الحية مع فتح المنصة يومياً.
+              ⚠️ بيانات حسابك تتوقف عند {new Date(lastDataDay * 1000).toISOString().slice(0, 10)} — اضغط «حفظ واتصال» لإعادة الجلب، وإن استمرت المشكلة فتأكد أن الحساب يعمل (DEPLOYED) وأن الوسيط يوفّر بيانات الرمز.
             </div>
           )}
           <div className="min-h-0 flex-1 p-2">
             <div className="relative h-full overflow-hidden rounded-md border border-[#1a2540] bg-[#050810] p-1">
               {chartView === 'engine' ? (
-                mode === 'live' && liveStatus !== 'ok' ? (
+                liveStatus !== 'ok' ? (
                   <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
                     {liveStatus === 'loading' && <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />}
                     <p className="max-w-sm text-[12px] leading-relaxed text-slate-400">
-                      {liveStatus === 'loading' && 'جارٍ الاتصال بحسابك عبر MetaApi وسحب شموع الذهب…'}
-                      {liveStatus === 'idle' && 'أدخل بيانات MetaApi في اللوحة الجانبية (API Token + Account ID) ثم اضغط «حفظ واتصال»'}
+                      {liveStatus === 'loading' && 'جارٍ الاتصال بحسابك عبر MetaApi وسحب 30 يوماً من شموع الذهب…'}
+                      {liveStatus === 'idle' && 'أدخل بيانات MetaApi في اللوحة الجانبية (API Token + Account ID + الرمز) ثم اضغط «حفظ واتصال»'}
                       {liveStatus === 'error' && liveError}
                     </p>
                   </div>
@@ -542,9 +511,7 @@ export default function App() {
           {stats && <LevelStats st={stats} />}
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
-            {mode === 'sim'
-              ? 'البيانات الحالية محاكاة تعليمية مبنية على سلوك الذهب اللحظي. للبيانات الحقيقية فعّل «بيانات حقيقية» واربط حساب MetaApi.'
-              : 'البيانات حقيقية من حساب MT4/MT5 عبر MetaApi. تُحدَّث الشمعة الحالية كل 15 ثانية. هذا ليس نصيحة استثمارية.'}
+            بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، وتُحدَّث الشمعة الحالية كل 15 ثانية. هذا ليس نصيحة استثمارية.
           </p>
         </aside>
       </div>

@@ -118,9 +118,8 @@ function mapCandle(c: RawCandle): Candle {
   };
 }
 
-// شموع تاريخية M15 — مع محاولة سحب أعمق تاريخ متاح بعدة استراتيجيات
+// شموع تاريخية M15 — ترقيم للأمام: كل دفعة 1000 شمعة حتى الوصول للحاضر
 export async function fetchHistory(creds: MetaApiCreds, region: string, days: number): Promise<Candle[]> {
-  const startTime = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
   const base =
     `/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
     `/historical-market-data/symbols/${encodeURIComponent(creds.symbol)}/timeframes/15m/candles`;
@@ -128,34 +127,25 @@ export async function fetchHistory(creds: MetaApiCreds, region: string, days: nu
   const map = (raw: RawCandle[]): Candle[] =>
     raw.map(mapCandle).sort((a, b) => a.time - b.time);
 
-  // المحاولة 1: منذ N أيام بحد 1000
-  let candles = map(await apiFetchHosts(mdHosts(region), `${base}?startTime=${encodeURIComponent(startTime)}&limit=1000`, creds.token));
-
-  // المحاولة 2: بدون startTime (بعض الحسابات تعيد الأحدث افتراضياً بعمق أكبر)
-  if (candles.length < 400) {
-    try {
-      const alt = map(await apiFetchHosts(mdHosts(region), `${base}?limit=1000`, creds.token));
-      const merged = new Map<number, Candle>();
-      for (const c of [...alt, ...candles]) merged.set(c.time, c);
-      candles = [...merged.values()].sort((a, b) => a.time - b.time);
-    } catch { /* نكتفي بالمحاولة الأولى */ }
+  let out: Candle[] = [];
+  let from = new Date(Date.now() - days * 24 * 3600 * 1000);
+  for (let i = 0; i < 8; i++) {
+    const chunk = map(await apiFetchHosts(
+      mdHosts(region),
+      `${base}?startTime=${encodeURIComponent(from.toISOString())}&limit=1000`,
+      creds.token
+    ));
+    const fresh = chunk.filter((c) => !out.length || c.time > out[out.length - 1].time);
+    if (!fresh.length) break;
+    out = [...out, ...fresh];
+    if (chunk.length < 1000) break; // وصلنا لنهاية المتاح
+    from = new Date((out[out.length - 1].time + 900) * 1000);
   }
 
-  // المحاولة 3: ترقيم للخلف عبر endTime إن كان مدعوماً
-  for (let i = 0; i < 3 && candles.length >= 1000; i++) {
-    try {
-      const oldest = new Date(candles[0].time * 1000 - 60 * 1000).toISOString();
-      const older = map(await apiFetchHosts(mdHosts(region), `${base}?endTime=${encodeURIComponent(oldest)}&limit=1000`, creds.token));
-      const fresh = older.filter((c) => c.time < candles[0].time);
-      if (!fresh.length) break;
-      candles = [...fresh, ...candles];
-    } catch { break; }
-  }
-
-  if (!candles.length) {
+  if (!out.length) {
     throw new Error(`لا توجد بيانات للرمز ${creds.symbol} — جرّب صيغة وسيطك (XAUUSD. / XAUUSD.pro / GOLD)`);
   }
-  return candles;
+  return out;
 }
 
 // الشمعة الحالية (المتكونة الآن)

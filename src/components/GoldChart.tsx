@@ -9,10 +9,12 @@ import {
   ColorType,
 } from 'lightweight-charts';
 import {
-  KILL_ZONES, detectFVGs, computeOTE,
+  KILL_ZONES, detectFVGs, computeOTE, detectStructure, autoLiquidityZones,
   type DayAnalysis, type Candle,
 } from '../lib/engine';
 import { TOOL_META, type Drawing, type ToolId } from '../lib/drawings';
+
+export interface AutoLayers { fvg: boolean; bos: boolean; liq: boolean; sess: boolean }
 
 const C = {
   bg: '#050810', grid: '#101830',
@@ -26,18 +28,19 @@ interface Props {
   showAll: Candle[];        // شموع العرض (بالفريم المختار)
   tfSeconds: number;
   drawings: Drawing[];
+  layers: AutoLayers;
   activeTool: ToolId;
   onChartClick: (t: number, p: number) => void;
 }
 
-export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawings, activeTool, onChartClick }: Props) {
+export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawings, layers, activeTool, onChartClick }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const drawRef = useRef<() => void>(() => {});
-  const stateRef = useRef({ analysis, drawings, tfSeconds });
-  stateRef.current = { analysis, drawings, tfSeconds };
+  const stateRef = useRef({ analysis, drawings, layers, tfSeconds });
+  stateRef.current = { analysis, drawings, layers, tfSeconds };
 
   // ---------- إنشاء الشارت ----------
   useEffect(() => {
@@ -113,7 +116,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
     drawRef.current = () => {
       const chart = chartRef.current, series = seriesRef.current, cv = canvasRef.current;
       if (!chart || !series || !cv) return;
-      const { analysis: an, drawings: drs } = stateRef.current;
+      const { analysis: an, drawings: drs, layers: ly } = stateRef.current;
       const ctx = cv.getContext('2d');
       if (!ctx) return;
       const dpr = window.devicePixelRatio || 1;
@@ -169,7 +172,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
           ctx.setLineDash([]);
         }
 
-        for (const g of detectFVGs(day, 50)) {
+        if (ly.fvg) for (const g of detectFVGs(day, 60)) {
           if (g.filled) continue;
           const yT = y(g.top), yB = y(g.bottom);
           if (yT === null || yB === null) continue;
@@ -202,6 +205,62 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, drawi
           ctx.fillStyle = '#22d3ee';
           ctx.font = '9px JetBrains Mono';
           ctx.fillText('OTE', xs + 4, (y(ote.oteTop) ?? 0) - 3);
+        }
+
+        // ===== الطبقات التلقائية =====
+        // 1) علامات الهيكل BOS / CHoCH
+        if (ly.bos) {
+          for (const m of detectStructure(day)) {
+            const xx = x(m.time), yy = y(m.price);
+            if (xx === null || yy === null) continue;
+            const col = m.kind === 'CHoCH' ? '#e879f9' : '#22d3ee';
+            ctx.strokeStyle = col;
+            ctx.setLineDash([2, 2]);
+            ctx.beginPath(); ctx.moveTo(xx - 14, yy); ctx.lineTo(xx + 14, yy); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = col;
+            ctx.font = 'bold 8.5px JetBrains Mono';
+            ctx.fillText(m.kind, xx + 16, m.dir === 'up' ? yy - 4 : yy + 10);
+          }
+        }
+        // 2) مناطق السيولة التلقائية
+        if (ly.liq) {
+          for (const zn of autoLiquidityZones(an)) {
+            const yT = y(zn.top), yB = y(zn.bottom);
+            if (yT === null || yB === null) continue;
+            const x1 = x(zn.from) ?? 0;
+            const x2 = zn.to ? (x(zn.to) ?? W) : W;
+            const col = zn.side === 'buy' ? '#fbbf24' : '#a78bfa';
+            ctx.fillStyle = col + '14';
+            ctx.fillRect(x1, yT, Math.min(W, x2) - x1, Math.max(yB - yT, 4));
+            ctx.strokeStyle = col + '55';
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(x1, yT, Math.min(W, x2) - x1, Math.max(yB - yT, 4));
+            ctx.setLineDash([]);
+            ctx.fillStyle = col;
+            ctx.font = 'bold 8.5px JetBrains Mono';
+            ctx.fillText(zn.label, x1 + 4, yT + 10);
+          }
+        }
+        // 3) خطوط افتتاح/إغلاق الجلسات
+        if (ly.sess) {
+          const marks: [number, string, string][] = [
+            [t0, 'افتتاح اليوم', '#22d3ee'],
+            [t0 + 8 * 3600, 'افتتاح لندن', '#22d3ee'],
+            [t0 + 13 * 3600, 'افتتاح نيويورك', '#34d399'],
+            [t0 + 21 * 3600, 'إغلاق نيويورك', '#f97316'],
+          ];
+          for (const [tt, label, col] of marks) {
+            const xx = x(tt);
+            if (xx === null || xx < 0 || xx > W) continue;
+            ctx.strokeStyle = col + '66';
+            ctx.setLineDash([1, 4]);
+            ctx.beginPath(); ctx.moveTo(xx, 0); ctx.lineTo(xx, H); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = col;
+            ctx.font = '8.5px JetBrains Mono';
+            ctx.fillText(label, xx + 3, H - 6);
+          }
         }
 
         const now = Math.floor(Date.now() / 1000);

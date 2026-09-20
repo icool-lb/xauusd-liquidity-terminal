@@ -579,3 +579,78 @@ export function aggregate(candles: Candle[], seconds: number): Candle[] {
 export function utcDayStartOf(t: number) {
   return utcDayStart(t);
 }
+
+
+// ---------- كشف الهيكل التلقائي: BOS / CHoCH ----------
+export interface StructMark {
+  time: number;
+  price: number;
+  kind: 'BOS' | 'CHoCH';
+  dir: 'up' | 'down';
+}
+
+export function detectStructure(candles: Candle[], wing = 3): StructMark[] {
+  const marks: StructMark[] = [];
+  let trend = 0; // 1 صاعد، -1 هابط
+  let lastPH = NaN, lastPL = NaN;
+  let lastPHtime = 0, lastPLtime = 0;
+  for (let i = wing; i < candles.length; i++) {
+    // قمة/قاع محوري مؤكد (ننظر wing شموع للخلف)
+    const j = i - wing;
+    let isPH = true, isPL = true;
+    for (let k = j - wing; k <= j + wing; k++) {
+      if (k < 0 || k >= candles.length || k === j) continue;
+      if (candles[k].high > candles[j].high) isPH = false;
+      if (candles[k].low < candles[j].low) isPL = false;
+    }
+    if (isPH) { lastPH = candles[j].high; lastPHtime = candles[j].time; }
+    if (isPL) { lastPL = candles[j].low; lastPLtime = candles[j].time; }
+
+    const c = candles[i];
+    if (!isNaN(lastPH) && lastPHtime < c.time && c.close > lastPH && candles[i - 1].close <= lastPH) {
+      const kind = trend === -1 ? 'CHoCH' : 'BOS';
+      marks.push({ time: c.time, price: lastPH, kind, dir: 'up' });
+      trend = 1;
+      lastPH = NaN;
+    }
+    if (!isNaN(lastPL) && lastPLtime < c.time && c.close < lastPL && candles[i - 1].close >= lastPL) {
+      const kind = trend === 1 ? 'CHoCH' : 'BOS';
+      marks.push({ time: c.time, price: lastPL, kind, dir: 'down' });
+      trend = -1;
+      lastPL = NaN;
+    }
+  }
+  return marks;
+}
+
+// ---------- مناطق السيولة التلقائية (فوق القمم / تحت القيعان) ----------
+export interface LiqZone {
+  top: number;
+  bottom: number;
+  side: 'buy' | 'sell';
+  label: string;
+  from: number;
+  to?: number;
+}
+
+export function autoLiquidityZones(a: DayAnalysis): LiqZone[] {
+  const zones: LiqZone[] = [];
+  const t0 = a.candles[0]?.time ?? 0;
+  const tEnd = a.candles[a.candles.length - 1]?.time ?? t0;
+  const depth = 4; // عمق المنطقة بالدولار فوق/تحت المستوى
+  const mk = (price: number, side: 'buy' | 'sell', label: string, kind: LevelKind) => {
+    if (!Number.isFinite(price)) return;
+    const lv = a.levels.find((l) => l.kind === kind);
+    zones.push({
+      top: side === 'buy' ? price + depth : price,
+      bottom: side === 'buy' ? price : price - depth,
+      side, label, from: t0,
+      to: lv?.swept && lv.sweptAt ? lv.sweptAt : tEnd + 4 * 3600,
+    });
+  };
+  mk(a.pdh, 'buy', 'سيولة شرائية — فوق قمة الأمس', 'PDH');
+  mk(a.asiaHigh, 'buy', 'سيولة شرائية — فوق قمة آسيا', 'ASIA_H');
+  mk(a.pdl, 'sell', 'سيولة بيعية — تحت قاع الأمس', 'PDL');
+  mk(a.asiaLow, 'sell', 'سيولة بيعية — تحت قاع آسيا', 'ASIA_L');
+  return zones;
+}

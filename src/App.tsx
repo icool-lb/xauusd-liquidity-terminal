@@ -70,7 +70,7 @@ export default function App() {
     try {
       const region = await resolveAccount(c);
       regionRef.current = region;
-      const candles = await fetchHistory(c, region, DAYS);
+      const candles = await fetchHistory(c, region, 30);
       setLiveData(candles);
       if (candles.length) {
         const from = new Date(candles[0].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
@@ -117,6 +117,7 @@ export default function App() {
 
   // ---- أدوات الرسم والفريمات ----
   const [tf, setTf] = useState(900); // ثواني
+  const [layers, setLayers] = useState({ fvg: true, bos: true, liq: true, sess: false });
   const [activeTool, setActiveTool] = useState<ToolId>('none');
   const [pending, setPending] = useState<{ t: number; p: number } | null>(null);
   const [drawings, setDrawings] = useState<Drawing[]>([]);
@@ -235,7 +236,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V7</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V9</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -425,9 +426,35 @@ export default function App() {
               <span dir="ltr" className="mr-auto rounded-sm bg-emerald-400/10 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-300">{dataInfo}</span>
             )}
           </div>
-          {/* شريط أدوات الرسم */}
+          {/* شريط الطبقات التلقائية + أدوات الرسم اليدوي */}
           {chartView === 'engine' && (
-            <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-3 pt-1.5 text-[9.5px] font-bold" dir="ltr">
+            <div className="shrink-0 space-y-1 px-3 pt-1.5">
+              {/* كشف تلقائي بنقرة واحدة */}
+              <div className="flex items-center gap-1 overflow-x-auto text-[9.5px] font-bold">
+                <span className="shrink-0 text-slate-500">كشف تلقائي:</span>
+                {([
+                  ['fvg', 'FVG', '#64748b'],
+                  ['bos', 'BOS / CHoCH', '#e879f9'],
+                  ['liq', 'مناطق السيولة', '#fbbf24'],
+                  ['sess', 'افتتاح/إغلاق', '#f97316'],
+                ] as const).map(([k, label, col]) => (
+                  <button
+                    key={k}
+                    onClick={() => setLayers((s) => ({ ...s, [k]: !s[k] }))}
+                    className="shrink-0 rounded-sm border px-2 py-1 transition active:scale-95"
+                    style={{
+                      borderColor: layers[k] ? col : '#1a2540',
+                      color: layers[k] ? col : '#64748b',
+                      background: layers[k] ? col + '18' : 'transparent',
+                    }}
+                  >
+                    {layers[k] ? '◉ ' : '○ '}{label}
+                  </button>
+                ))}
+              </div>
+              {/* رسم يدوي */}
+              <div className="flex items-center gap-1 overflow-x-auto text-[9.5px] font-bold" dir="ltr">
+                <span className="shrink-0 text-slate-500" dir="rtl">يدوي:</span>
               {(Object.keys(TOOL_META) as (keyof typeof TOOL_META)[]).map((k) => (
                 <button
                   key={k}
@@ -458,6 +485,7 @@ export default function App() {
               {activeTool !== 'none' && activeTool !== 'erase' && !pending && TOOL_META[activeTool]?.kind !== 'zone' && (
                 <span className="shrink-0 px-1 text-cyan-300">← انقر على الشارت لوضع {TOOL_META[activeTool]?.label}</span>
               )}
+              </div>
             </div>
           )}
           {/* تحذير البيانات الراكدة */}
@@ -485,6 +513,7 @@ export default function App() {
                     showAll={displayCandles}
                     tfSeconds={tf}
                     drawings={drawings}
+                    layers={layers}
                     activeTool={activeTool}
                     onChartClick={handleChartClick}
                   />

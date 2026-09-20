@@ -3,12 +3,13 @@ import GoldChart from './components/GoldChart';
 import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline } from './components/Panels';
 import {
   generateHistory, analyzeDay, backtestFull, nextLiveCandle, makeRng,
-  sessionOf, inKillZone, type Candle, type DayAnalysis,
+  sessionOf, inKillZone, aggregate, type Candle, type DayAnalysis,
 } from './lib/engine';
 import {
   loadCreds, saveCreds, loadRegion, resolveAccount, fetchHistory, fetchCurrentCandle,
   type MetaApiCreds,
 } from './lib/metaapi';
+import { TOOL_META, loadDrawings, saveDrawings, uid, type Drawing, type ToolId } from './lib/drawings';
 
 const DAY = 24 * 3600;
 const BASE_PRICE = 4378;
@@ -114,12 +115,68 @@ export default function App() {
     [mode, simHistory, simLive, liveData]
   );
 
+  // ---- أدوات الرسم والفريمات ----
+  const [tf, setTf] = useState(900); // ثواني
+  const [activeTool, setActiveTool] = useState<ToolId>('none');
+  const [pending, setPending] = useState<{ t: number; p: number } | null>(null);
+  const [drawings, setDrawings] = useState<Drawing[]>([]);
+
   const todayStart = Math.floor(Date.now() / 1000 / DAY) * DAY;
+  // إذا كانت البيانات راكدة (اشتراك مجاني)، حلّل آخر يوم متاح فعلياً
+  const lastDataDay = all.length ? Math.floor(all[all.length - 1].time / DAY) * DAY : todayStart;
+  const effDayStart = Math.min(todayStart - dayOffset * DAY, lastDataDay);
+  const dataStale = all.length > 0 && todayStart - lastDataDay >= DAY;
+  const dayKey = new Date(effDayStart * 1000).toISOString().slice(0, 10);
+  const symbolKey = (mode === 'live' ? creds?.symbol : null) ?? 'SIM';
+
+  // تحميل/حفظ الرسوم لكل يوم ورمز
+  useEffect(() => {
+    setDrawings(loadDrawings(symbolKey, dayKey));
+    setPending(null);
+  }, [symbolKey, dayKey]);
+  useEffect(() => {
+    saveDrawings(symbolKey, dayKey, drawings);
+  }, [drawings, symbolKey, dayKey]);
+
+  const handleChartClick = (t: number, p: number) => {
+    if (activeTool === 'none') return;
+    const price = Math.round(p * 100) / 100;
+    if (activeTool === 'erase') {
+      setDrawings((ds) => {
+        if (!ds.length) return ds;
+        // احذف الأقرب لنقطة النقر (مسافة مركّبة سعر+زمن)
+        let best = 0, bestScore = Infinity;
+        ds.forEach((d, i) => {
+          const score = Math.abs(d.p1 - price) + Math.abs(d.t1 - t) / 7200 + (d.p2 ? Math.abs(d.p2 - price) * 0.5 : 0);
+          if (score < bestScore) { bestScore = score; best = i; }
+        });
+        return ds.filter((_, i) => i !== best);
+      });
+      return;
+    }
+    const kind = TOOL_META[activeTool]?.kind;
+    if (kind === 'zone') {
+      if (!pending) {
+        setPending({ t, p: price });
+      } else {
+        setDrawings((ds) => [...ds, {
+          id: uid(), tool: activeTool as Drawing['tool'],
+          p1: pending.p, p2: price, t1: Math.min(pending.t, t), t2: Math.max(pending.t, t),
+        }]);
+        setPending(null);
+      }
+    } else if (kind === 'hline' || kind === 'label') {
+      setDrawings((ds) => [...ds, { id: uid(), tool: activeTool as Drawing['tool'], p1: price, t1: t }]);
+    } else if (kind === 'vline') {
+      setDrawings((ds) => [...ds, { id: uid(), tool: activeTool as Drawing['tool'], p1: price, t1: t }]);
+    }
+  };
   const analysis: DayAnalysis | null = useMemo(
-    () => (all.length >= 10 ? analyzeDay(all, todayStart - dayOffset * DAY) : null),
-    [all, todayStart, dayOffset]
+    () => (all.length >= 10 ? analyzeDay(all, effDayStart) : null),
+    [all, effDayStart]
   );
   const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, DAYS - 1) : null), [all]);
+  const displayCandles = useMemo(() => aggregate(all, tf), [all, tf]);
 
   // تحيز H1: إغلاق آخر ساعة مقابل متوسط آخر 8 ساعات
   const h1Bias = useMemo(() => {
@@ -337,7 +394,7 @@ export default function App() {
 
         {/* المركز: الشارت + السجل */}
         <main className="order-1 flex min-h-[520px] min-w-0 flex-1 flex-col lg:order-2 lg:min-h-0">
-          <div className="flex shrink-0 items-center gap-1 px-3 pt-2 text-[10px] font-bold">
+          <div className="flex shrink-0 flex-wrap items-center gap-1 px-3 pt-2 text-[10px] font-bold">
             <button
               onClick={() => setChartView('engine')}
               className={`rounded-sm px-2.5 py-1 transition ${chartView === 'engine' ? 'bg-[#111a2b] text-amber-300' : 'text-slate-500 hover:text-white'}`}
@@ -350,13 +407,65 @@ export default function App() {
             >
               TradingView مباشر
             </button>
-            <span className="mr-2 text-[9px] font-normal text-slate-600">
-              {chartView === 'tv' ? 'مرجع بصري للسعر الحقيقي — التحليل والإشارات في شارت التحليل' : ''}
-            </span>
+            {/* مبدّل الفريمات */}
+            {chartView === 'engine' && (
+              <div dir="ltr" className="flex rounded-sm border border-[#2a3a5f] p-0.5 font-mono text-[9px]">
+                {[[300, '5m'], [900, '15m'], [1800, '30m'], [3600, '1H'], [14400, '4H'], [86400, '1D']].map(([s, l]) => (
+                  <button
+                    key={s}
+                    onClick={() => setTf(s as number)}
+                    className={`rounded-sm px-1.5 py-0.5 transition ${tf === s ? 'bg-cyan-400/20 text-cyan-300' : 'text-slate-500 hover:text-white'}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
             {mode === 'live' && dataInfo && (
               <span dir="ltr" className="mr-auto rounded-sm bg-emerald-400/10 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-300">{dataInfo}</span>
             )}
           </div>
+          {/* شريط أدوات الرسم */}
+          {chartView === 'engine' && (
+            <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-3 pt-1.5 text-[9.5px] font-bold" dir="ltr">
+              {(Object.keys(TOOL_META) as (keyof typeof TOOL_META)[]).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => { setActiveTool(activeTool === k ? 'none' : (k as ToolId)); setPending(null); }}
+                  className="shrink-0 rounded-sm border px-2 py-1 transition active:scale-95"
+                  style={{
+                    borderColor: activeTool === k ? TOOL_META[k].color : '#1a2540',
+                    color: activeTool === k ? TOOL_META[k].color : '#8b98b8',
+                    background: activeTool === k ? TOOL_META[k].color + '18' : 'transparent',
+                  }}
+                >
+                  {TOOL_META[k].label}
+                </button>
+              ))}
+              <button
+                onClick={() => { setActiveTool(activeTool === 'erase' ? 'none' : 'erase'); setPending(null); }}
+                className={`shrink-0 rounded-sm border px-2 py-1 transition ${activeTool === 'erase' ? 'border-red-400 bg-red-400/15 text-red-300' : 'border-[#1a2540] text-slate-500 hover:text-white'}`}
+              >
+                ⌫ ممحاة
+              </button>
+              <button
+                onClick={() => { setDrawings([]); setPending(null); }}
+                className="shrink-0 rounded-sm border border-[#1a2540] px-2 py-1 text-slate-500 transition hover:text-red-300"
+              >
+                مسح الكل ({drawings.length})
+              </button>
+              {pending && <span className="shrink-0 px-1 text-amber-300">← انقر النقطة الثانية لإكمال المنطقة</span>}
+              {activeTool !== 'none' && activeTool !== 'erase' && !pending && TOOL_META[activeTool]?.kind !== 'zone' && (
+                <span className="shrink-0 px-1 text-cyan-300">← انقر على الشارت لوضع {TOOL_META[activeTool]?.label}</span>
+              )}
+            </div>
+          )}
+          {/* تحذير البيانات الراكدة */}
+          {mode === 'live' && dataStale && (
+            <div className="mx-3 mt-1.5 shrink-0 rounded-sm border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] leading-relaxed text-amber-300">
+              ⚠️ بيانات حسابك التاريخية تتوقف عند {new Date(lastDataDay * 1000).toISOString().slice(0, 10)} (حد الباقة المجانية في MetaApi) — المنصة تحلل آخر يوم متاح، وستتراكم البيانات الحية مع فتح المنصة يومياً.
+            </div>
+          )}
           <div className="min-h-0 flex-1 p-2">
             <div className="relative h-full overflow-hidden rounded-md border border-[#1a2540] bg-[#050810] p-1">
               {chartView === 'engine' ? (
@@ -370,7 +479,15 @@ export default function App() {
                     </p>
                   </div>
                 ) : (
-                  <GoldChart candles={analysis?.candles ?? []} analysis={analysis} showAll={all} />
+                  <GoldChart
+                    candles={analysis?.candles ?? []}
+                    analysis={analysis}
+                    showAll={displayCandles}
+                    tfSeconds={tf}
+                    drawings={drawings}
+                    activeTool={activeTool}
+                    onChartClick={handleChartClick}
+                  />
                 )
               ) : (
                 <iframe

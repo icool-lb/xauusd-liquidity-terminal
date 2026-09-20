@@ -556,3 +556,26 @@ export function backtestFull(all: Candle[], days: number): BacktestFull {
     expectancyR: total ? r2(sumR / total) : 0,
   };
 }
+
+
+// ---------- تجميع الشموع لفريمات أعلى ----------
+export function aggregate(candles: Candle[], seconds: number): Candle[] {
+  if (seconds <= 900) return candles;
+  const map = new Map<number, Candle>();
+  for (const c of candles) {
+    const k = Math.floor(c.time / seconds) * seconds;
+    const e = map.get(k);
+    if (e) {
+      e.high = Math.max(e.high, c.high);
+      e.low = Math.min(e.low, c.low);
+      e.close = c.close;
+    } else {
+      map.set(k, { time: k, open: c.open, high: c.high, low: c.low, close: c.close });
+    }
+  }
+  return [...map.values()];
+}
+
+export function utcDayStartOf(t: number) {
+  return utcDayStart(t);
+}

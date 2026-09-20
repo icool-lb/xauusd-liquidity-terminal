@@ -36,6 +36,7 @@ export default function App() {
   const [seed, setSeed] = useState(20260920);
   const simHistory = useMemo(() => generateHistory(DAYS, BASE_PRICE, seed), [seed]);
   const [simLive, setSimLive] = useState<Candle[]>([]);
+  const [dataInfo, setDataInfo] = useState('');
   useEffect(() => { setSimLive([]); }, [seed]);
 
   // ---- مشترك ----
@@ -70,6 +71,11 @@ export default function App() {
       regionRef.current = region;
       const candles = await fetchHistory(c, region, DAYS);
       setLiveData(candles);
+      if (candles.length) {
+        const from = new Date(candles[0].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
+        const to = new Date(candles[candles.length - 1].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
+        setDataInfo(`${candles.length} شمعة · ${from} ← ${to} UTC`);
+      } else setDataInfo('');
       setLiveStatus('ok');
     } catch (e) {
       setLiveStatus('error');
@@ -110,10 +116,10 @@ export default function App() {
 
   const todayStart = Math.floor(Date.now() / 1000 / DAY) * DAY;
   const analysis: DayAnalysis | null = useMemo(
-    () => (all.length > 200 ? analyzeDay(all, todayStart - dayOffset * DAY) : null),
+    () => (all.length >= 60 ? analyzeDay(all, todayStart - dayOffset * DAY) : null),
     [all, todayStart, dayOffset]
   );
-  const stats = useMemo(() => (all.length > 200 ? backtestFull(all, DAYS - 1) : null), [all]);
+  const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, DAYS - 1) : null), [all]);
 
   // تحيز H1: إغلاق آخر ساعة مقابل متوسط آخر 8 ساعات
   const h1Bias = useMemo(() => {
@@ -283,6 +289,9 @@ export default function App() {
               onSave={(c) => { saveCreds(c); setCreds(c); }}
               onTest={() => creds && connectLive(creds)}
             />
+          )}
+          {mode === 'live' && liveStatus === 'ok' && dataInfo && (
+            <p dir="ltr" className="rounded-sm bg-emerald-400/5 px-2 py-1 text-center font-mono text-[9.5px] text-emerald-300/80">{dataInfo}</p>
           )}
           {/* اختيار اليوم */}
           <div>

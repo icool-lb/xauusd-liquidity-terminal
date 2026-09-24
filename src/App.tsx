@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import GoldChart from './components/GoldChart';
-import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline } from './components/Panels';
+import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
 import {
   analyzeDay, backtestFull, sessionOf, inKillZone, aggregate,
   type Candle, type DayAnalysis,
@@ -174,7 +174,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V12</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V13</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -221,9 +221,14 @@ export default function App() {
         <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-[#1a2540] bg-[#070b14] px-4 py-1.5 text-[10px]">
           {([
             ['قمة الأمس', analysis.pdh, 'text-violet-300'],
+            ['ق لندن', analysis.londonHigh, 'text-cyan-200'],
+            ['قاع لندن', analysis.londonLow, 'text-cyan-200'],
             ['قمة آسيا', analysis.asiaHigh, 'text-amber-300'],
             ['الافتتاح', analysis.open, 'text-cyan-300'],
             ['قاع آسيا', analysis.asiaLow, 'text-amber-300'],
+            ['ق نيويورك', analysis.nyHigh, 'text-emerald-200'],
+            ['قاع نيويورك', analysis.nyLow, 'text-emerald-200'],
+            ['إغلاق نيويورك أمس', analysis.prevNyClose, 'text-orange-300'],
             ['قاع الأمس', analysis.pdl, 'text-violet-300'],
           ] as [string, number, string][]).filter(([, v]) => Number.isFinite(v)).map(([l, v, c], i) => (
             <div key={i} className="flex shrink-0 items-center gap-1.5 rounded-sm bg-[#0c1220] px-2.5 py-1">
@@ -238,7 +243,7 @@ export default function App() {
             </span>
             <span className="text-slate-500">اليومي:</span>
             <span className={`font-bold ${analysis.bias === 'bullish' ? 'text-emerald-300' : analysis.bias === 'bearish' ? 'text-red-300' : 'text-slate-400'}`}>
-              {analysis.bias === 'bullish' ? '▲ صاعد (فوق الافتتاح)' : analysis.bias === 'bearish' ? '▼ هابط (تحت الافتتاح)' : '● محايد'}
+              {analysis.bias === 'bullish' ? '▲ إيجابي — فوق الافتتاح' : analysis.bias === 'bearish' ? '▼ سلبي — أسفل الافتتاح' : '● محايد'}
             </span>
           </div>
         </div>
@@ -425,6 +430,7 @@ export default function App() {
           {stats && <StatsPanel st={stats} />}
           {stats && <EquityCurve st={stats} />}
           {stats && <LevelStats st={stats} />}
+          <CrewPanel />
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
             بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، وتُحدَّث الشمعة الحالية كل 15 ثانية. هذا ليس نصيحة استثمارية.

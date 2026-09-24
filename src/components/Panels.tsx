@@ -15,15 +15,22 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ---------- لوحة المستويات ----------
 export function LevelsPanel({ a }: { a: DayAnalysis }) {
-  const order = ['PDH', 'RES', 'ASIA_H', 'OPEN', 'ASIA_L', 'SUP', 'PDL'];
+  const order = ['PDH', 'LON_H', 'LON_C', 'RES', 'ASIA_H', 'OPEN', 'ASIA_L', 'SUP', 'NY_H', 'NY_L', 'NY_C', 'PDL'];
   const sorted = [...a.levels].sort(
-    (x, y) => order.indexOf(x.kind) - order.indexOf(y.kind) || y.price - x.price
+    (x, y) => (order.indexOf(x.kind) < 0 ? 99 : order.indexOf(x.kind)) - (order.indexOf(y.kind) < 0 ? 99 : order.indexOf(y.kind)) || y.price - x.price
   );
   const color: Record<string, string> = {
     PDH: 'text-violet-300', PDL: 'text-violet-300',
     ASIA_H: 'text-amber-300', ASIA_L: 'text-amber-300',
     OPEN: 'text-cyan-300', RES: 'text-red-300', SUP: 'text-emerald-300',
+    LON_H: 'text-cyan-200', LON_L: 'text-cyan-200', LON_C: 'text-orange-300',
+    NY_H: 'text-emerald-200', NY_L: 'text-emerald-200', NY_C: 'text-orange-300',
   };
+  const strength = {
+    strong: { t: 'قوي', c: 'bg-red-400/15 text-red-300' },
+    medium: { t: 'متوسط', c: 'bg-amber-400/15 text-amber-300' },
+    weak: { t: 'ضعيف', c: 'bg-slate-500/10 text-slate-500' },
+  } as const;
   return (
     <div>
       <SectionTitle>خريطة السيولة والمستويات</SectionTitle>
@@ -35,8 +42,14 @@ export function LevelsPanel({ a }: { a: DayAnalysis }) {
               lv.kind === 'OPEN' ? 'bg-cyan-400/5' : 'hover:bg-[#111a2b]'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <span className={`font-medium ${color[lv.kind]}`}>{lv.label}</span>
+            <div className="flex items-center gap-1.5">
+              <span className={`font-medium ${color[lv.kind] ?? 'text-slate-300'}`}>{lv.label}</span>
+              <span className={`rounded-sm px-1 py-px text-[8.5px] font-bold ${strength[lv.strength].c}`}>
+                {strength[lv.strength].t}
+              </span>
+              {(lv.kind === 'RES' || lv.kind === 'SUP') && lv.touches > 0 && (
+                <span className="text-[8.5px] text-slate-600">{lv.touches} لمسة</span>
+              )}
               {lv.swept && (
                 <span className="rounded-sm bg-amber-400/15 px-1.5 py-px text-[9px] font-bold text-amber-300">
                   تم سحبه ✓
@@ -393,6 +406,97 @@ export function SessionTimeline() {
       <div className="absolute inset-x-0 top-6 flex justify-between font-mono text-[8px] text-slate-600">
         <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
       </div>
+    </div>
+  );
+}
+
+// ---------- طاقم الخبراء — توزيع المهام والتطوير ----------
+interface Expert {
+  name: string;
+  role: string;
+  color: string;
+  task: string;
+  proposal: string;
+}
+
+const EXPERTS: Expert[] = [
+  {
+    name: 'مايكل روس',
+    role: 'خبير مالي — بورصة نيويورك (NYSE/COMEX)',
+    color: '#f87171',
+    task: 'متابعة جلسة نيويورك: سيولة COMEX المفتوحة، تدفق صناديق الذهب، وأخبار الفائدة والتضخم لحظة صدورها.',
+    proposal: 'تكامل تقويم الأخبار الاقتصادية (CPI / FOMC / NFP) مع حظر الدخول الآلي وقت الإصدار وتلوينه على الخط الزمني.',
+  },
+  {
+    name: 'كينجي ساتو',
+    role: 'خبير مالي — بورصة طوكيو (TSE)',
+    color: '#34d399',
+    task: 'قياس نطاق آسيا يومياً قبل افتتاح لندن، ومقارنته بنطاق الأمس لتوقّع اتساع أو تضيّق التقلبات.',
+    proposal: 'تقرير صباحي آلي: نسبة اتساع آسيا إلى متوسط 5 أيام كمؤشر جاهزية، مع تنبيه إذا ضاق النطاق بشكل غير مألوف.',
+  },
+  {
+    name: 'أليكس ريد',
+    role: 'خبير استراتيجيات التداول والبرمجة — TradingView',
+    color: '#22d3ee',
+    task: 'صيانة استراتيجية Pine Script (سحب سيولة ← CHoCH ← دخول) وتحسين شروطها من نتائج الباك-تيست الأسبوعية.',
+    proposal: 'مزامنة إشارات المنصة مع TradingView عبر Webhook، وتنبيه فوري يصل قبل إغلاق شمعة التفعيل.',
+  },
+  {
+    name: 'المحلل الرئيسي — أنا',
+    role: 'منسق تحليل السيولة (ICT/SMC)',
+    color: '#a78bfa',
+    task: 'مراجعة سحوبات اليوم وتصنيف قوة كل مستوى (قوي/متوسط/ضعيف) وتوثيق الأوردر بلوك المُختبرة.',
+    proposal: 'دفتر صفقات يدوي (Journal) يقارن النتيجة الفعلية بالخطة، لكشف الانحرافات المتكررة عن القواعد.',
+  },
+  {
+    name: 'مهندس البيانات — أنا',
+    role: 'موثوقية التغذية — MetaApi',
+    color: '#fbbf24',
+    task: 'مراقبة عمق التاريخ وجودة التغذية كل 15 ثانية، والتحقق الدائم من تطابق الرمز مع السعر اللحظي للوسيط.',
+    proposal: 'تنبيه تيليجرام فوري عند انقطاع التغذية أو فرق السعر عن السوق أكثر من 1.5%.',
+  },
+  {
+    name: 'مدير المخاطر — أنا',
+    role: 'حماية رأس المال',
+    color: '#e879f9',
+    task: 'تطبيق قاعدة المخاطرة لكل صفقة، حساب اللوت تلقائياً، وباك-تيست أسبوعي على آخر 25 يوماً.',
+    proposal: 'إحصاءات أداء حسب الجلسة واليوم (لندن مقابل نيويورك) لاختيار أفضل نافذة دخول وتقليل أيام الخسارة.',
+  },
+];
+
+export function CrewPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button onClick={() => setOpen((v) => !v)} className="mb-2 flex w-full items-center gap-2 text-right">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">طاقم الخبراء — توزيع المهام</h3>
+        <div className="h-px flex-1 bg-[#1a2540]" />
+        <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (6)'}</span>
+      </button>
+      {open && (
+        <div className="space-y-2">
+          {EXPERTS.map((e, i) => (
+            <div key={i} className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2">
+              <div className="mb-1 flex items-center gap-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-sm text-[10px] font-black" style={{ background: e.color + '22', color: e.color }}>
+                  {e.name[0]}
+                </span>
+                <div>
+                  <div className="text-[11px] font-bold leading-none text-white">{e.name}</div>
+                  <div className="mt-0.5 text-[8.5px] text-slate-500">{e.role}</div>
+                </div>
+              </div>
+              <p className="mb-1 text-[10px] leading-relaxed text-slate-400">
+                <span className="font-bold text-slate-300">مهمة اليوم: </span>{e.task}
+              </p>
+              <p className="text-[10px] leading-relaxed text-slate-500">
+                <span className="font-bold" style={{ color: e.color }}>اقتراح التطوير: </span>{e.proposal}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

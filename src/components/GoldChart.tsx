@@ -307,6 +307,12 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
       for (const lv of analysis.levels) {
         if (lv.kind === 'RES') lines.push(mk(lv.price, C.down, lv.label, 'dotted'));
         if (lv.kind === 'SUP') lines.push(mk(lv.price, C.up, lv.label, 'dotted'));
+        if (lv.kind === 'LON_H') lines.push(mk(lv.price, '#67e8f9', 'ق لندن'));
+        if (lv.kind === 'LON_L') lines.push(mk(lv.price, '#67e8f9', 'قاع لندن'));
+        if (lv.kind === 'NY_H') lines.push(mk(lv.price, '#6ee7b7', 'ق نيويورك'));
+        if (lv.kind === 'NY_L') lines.push(mk(lv.price, '#6ee7b7', 'قاع نيويورك'));
+        if (lv.kind === 'LON_C') lines.push(mk(lv.price, '#fdba74', 'إغلاق لندن', 'dotted'));
+        if (lv.kind === 'NY_C') lines.push(mk(lv.price, '#fdba74', 'إغلاق نيويورك', 'dotted'));
       }
       const sig = analysis.signals[0];
       if (sig) {

@@ -10,7 +10,10 @@ export interface Candle {
   close: number;
 }
 
-export type LevelKind = 'ASIA_H' | 'ASIA_L' | 'PDH' | 'PDL' | 'OPEN' | 'SUP' | 'RES';
+export type LevelKind = 'ASIA_H' | 'ASIA_L' | 'PDH' | 'PDL' | 'OPEN' | 'SUP' | 'RES'
+  | 'LON_H' | 'LON_L' | 'NY_H' | 'NY_L' | 'LON_C' | 'NY_C';
+
+export type LevelStrength = 'strong' | 'medium' | 'weak';
 
 export interface Level {
   kind: LevelKind;
@@ -18,6 +21,8 @@ export interface Level {
   price: number;
   swept: boolean;
   sweptAt?: number;
+  strength: LevelStrength;
+  touches: number;
 }
 
 export interface SweepEvent {
@@ -54,6 +59,14 @@ export interface DayAnalysis {
   asiaLow: number;
   pdh: number;
   pdl: number;
+  // قمم وقيعان الجلسات اليومية
+  londonHigh: number;
+  londonLow: number;
+  nyHigh: number;
+  nyLow: number;
+  // إغلاقات جلسات الأمس (مرجعية)
+  prevLondonClose: number;
+  prevNyClose: number;
   levels: Level[];
   sweeps: SweepEvent[];
   signals: Signal[];
@@ -274,20 +287,53 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
   const pdh = prevCandles.length ? Math.max(...prevCandles.map((c) => c.high)) : asiaHigh + 15;
   const pdl = prevCandles.length ? Math.min(...prevCandles.map((c) => c.low)) : asiaLow - 15;
 
+  // قمم وقيعان جلسات اليوم + إغلاقات جلسات الأمس
+  const londonC = dayCandles.filter((c) => sessionOf(c.time) === 'london');
+  const nyC = dayCandles.filter((c) => sessionOf(c.time) === 'ny');
+  const londonHigh = londonC.length ? Math.max(...londonC.map((c) => c.high)) : NaN;
+  const londonLow = londonC.length ? Math.min(...londonC.map((c) => c.low)) : NaN;
+  const nyHigh = nyC.length ? Math.max(...nyC.map((c) => c.high)) : NaN;
+  const nyLow = nyC.length ? Math.min(...nyC.map((c) => c.low)) : NaN;
+  const prevL = prevCandles.filter((c) => sessionOf(c.time) === 'london');
+  const prevN = prevCandles.filter((c) => sessionOf(c.time) === 'ny');
+  const prevLondonClose = prevL.length ? prevL[prevL.length - 1].close : NaN;
+  const prevNyClose = prevN.length ? prevN[prevN.length - 1].close : NaN;
+
   // دعوم ومقاومات من قمم/قيعان الأيام السابقة
   const pv = pivots(hist.slice(-96 * 5), 4);
   const sups = cluster(pv.lows.filter((p) => p < open - 4), 4).slice(-3);
   const ress = cluster(pv.highs.filter((p) => p > open + 4), 4).slice(0, 3);
 
+  // تقييم قوة المستوى: لمسات تاريخية ×0.8 + أساس السيولة + رقم نفسي صحيح
+  const strengthOf = (price: number, isSup: boolean, base: number): Pick<Level, 'strength' | 'touches'> => {
+    let touches = 0;
+    for (const c of hist) {
+      const near = isSup ? c.low : c.high;
+      if (Math.abs(near - price) <= 2.5) touches++;
+    }
+    let score = base + touches * 0.8;
+    if (Math.abs(price % 10) < 1.2 || Math.abs(price % 50) < 2) score += 0.5;
+    return { strength: score >= 3 ? 'strong' : score >= 1.5 ? 'medium' : 'weak', touches };
+  };
+  const mk = (kind: LevelKind, label: string, price: number, base: number, isSup: boolean): Level => ({
+    kind, label, price: r2(price), swept: false, ...strengthOf(price, isSup, base),
+  });
+
   const levels: Level[] = [
-    { kind: 'PDH', label: 'قمة الأمس', price: r2(pdh), swept: false },
-    { kind: 'ASIA_H', label: 'قمة آسيا', price: r2(asiaHigh), swept: false },
-    { kind: 'OPEN', label: 'الافتتاح اليومي', price: r2(open), swept: false },
-    { kind: 'ASIA_L', label: 'قاع آسيا', price: r2(asiaLow), swept: false },
-    { kind: 'PDL', label: 'قاع الأمس', price: r2(pdl), swept: false },
-    ...ress.map((p, i) => ({ kind: 'RES' as const, label: `مقاومة ${i + 1}`, price: r2(p), swept: false })),
-    ...sups.map((p, i) => ({ kind: 'SUP' as const, label: `دعم ${i + 1}`, price: r2(p), swept: false })),
+    mk('PDH', 'قمة الأمس', pdh, 2, false),
+    mk('ASIA_H', 'قمة آسيا', asiaHigh, 1.5, false),
+    mk('OPEN', 'الافتتاح اليومي', open, 1, false),
+    mk('ASIA_L', 'قاع آسيا', asiaLow, 1.5, true),
+    mk('PDL', 'قاع الأمس', pdl, 2, true),
+    ...ress.map((p, i) => mk('RES', `مقاومة ${i + 1}`, p, 0.5, false)),
+    ...sups.map((p, i) => mk('SUP', `دعم ${i + 1}`, p, 0.5, true)),
   ];
+  if (Number.isFinite(londonHigh)) levels.push(mk('LON_H', 'قمة لندن', londonHigh, 1, false));
+  if (Number.isFinite(londonLow)) levels.push(mk('LON_L', 'قاع لندن', londonLow, 1, true));
+  if (Number.isFinite(nyHigh)) levels.push(mk('NY_H', 'قمة نيويورك', nyHigh, 1, false));
+  if (Number.isFinite(nyLow)) levels.push(mk('NY_L', 'قاع نيويورك', nyLow, 1, true));
+  if (Number.isFinite(prevLondonClose)) levels.push(mk('LON_C', 'إغلاق لندن أمس', prevLondonClose, 1, false));
+  if (Number.isFinite(prevNyClose)) levels.push(mk('NY_C', 'إغلاق نيويورك أمس', prevNyClose, 1, false));
 
   // كشف السحب: فتيل يخترق المستوى بعد آسيا ثم إغلاق يعود داخله
   const sweeps: SweepEvent[] = [];
@@ -340,6 +386,9 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
     const stop = wantLong ? sw.extreme - buffer : sw.extreme + buffer;
     const risk = Math.abs(entry - stop);
     if (risk < 2) continue;
+    // قاعدة الافتتاح: أسفل الافتتاح سلبي (لا شراء تحته)، وفوقه إيجابي (لا بيع فوقه)
+    if (wantLong && entry < open - 2) continue;
+    if (!wantLong && entry > open + 2) continue;
     // الأهداف: أقرب سيولة مقابلة لم تُسحب بعد، ثم المستوى التالي
     const fresh = levels.filter((l) => !l.swept);
     const upLevels = fresh.filter((l) => l.price > entry + 3).sort((a, b) => a.price - b.price);
@@ -352,7 +401,9 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
     const reasons = [
       `سحب سيولة ${sw.levelLabel} (${sw.direction === 'below' ? 'أسفل' : 'فوق'} ${sw.levelPrice})`,
       `كسر هيكلي ${wantLong ? 'صاعد' : 'هابط'} بعد السحب`,
-      entry > open ? 'السعر فوق الافتتاح اليومي' : 'السعر تحت الافتتاح اليومي',
+      entry > open
+        ? 'التداول فوق الافتتاح = إيجابي (موافق للقاعدة)'
+        : 'التداول أسفل الافتتاح = سلبي (موافق للقاعدة)',
     ];
 
     // محاكاة النتيجة بعد الدخول
@@ -388,7 +439,10 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
   return {
     dayKey: new Date(dayStart * 1000).toISOString().slice(0, 10),
     candles: dayCandles, open: r2(open), asiaHigh: r2(asiaHigh), asiaLow: r2(asiaLow),
-    pdh: r2(pdh), pdl: r2(pdl), levels, sweeps, signals, bias, lastPrice: r2(lastPrice),
+    pdh: r2(pdh), pdl: r2(pdl),
+    londonHigh: r2(londonHigh), londonLow: r2(londonLow), nyHigh: r2(nyHigh), nyLow: r2(nyLow),
+    prevLondonClose: r2(prevLondonClose), prevNyClose: r2(prevNyClose),
+    levels, sweeps, signals, bias, lastPrice: r2(lastPrice),
   };
 }
 

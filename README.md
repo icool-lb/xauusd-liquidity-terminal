@@ -1,73 +1,60 @@
-# React + TypeScript + Vite
+# منصة سيولة الذهب — XAUUSD Liquidity Terminal (V13)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+منصة تحليل احترافية للذهب (XAUUSD) مبنية على منطق السيولة و ICT/Smart Money،
+متصلة ببيانات حقيقية من حساب MT4/MT5 عبر MetaApi Cloud API.
 
-Currently, two official plugins are available:
+## المزايا
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **بيانات حقيقية فقط**: جلب 30 يوماً من شموع M15 عبر MetaApi مع ترقيم تلقائي للخلف،
+  وتحديث الشمعة الحالية كل 15 ثانية، مع فحص تطابق السعر تلقائياً.
+- **محرك سيولة ICT**: كشف سحب السيولة (فتيل اختراق + عودة)، الكسر الهيكلي CHoCH/BOS،
+  وقاعدة الانحياز اليومي (فوق الافتتاح = إيجابي، أسفله = سلبي) كفلتر إجباري للإشارات.
+- **مستويات الجلسات الكاملة**: قمم وقيعان آسيا/لندن/نيويورك، قمة وقاع الأمس،
+  إغلاقات جلسات الأمس — مع تصنيف قوة كل مستوى (قوي/متوسط/ضعيف) من اللمسات التاريخية والأرقام النفسية.
+- **كشف تلقائي بأزرار**: FVG، BOS/CHoCH، أوردر بلوك شرائية وبيعية، مناطق سيولة شرائية/بيعية،
+  خطوط افتتاح/إغلاق الجلسات.
+- **صفقات مع أسباب واضحة**: سحب سيولة ← كسر هيكلي ← دخول بوقف خلف السحب وهدف عند السيولة المقابلة.
+- **أدوات شارت احترافية**: فريمات 5m–1D، زوم دقيق حول المركز، ملاءمة يوم التحليل،
+  ملء الشاشة (يعمل على الجوال)، سحب لمسي وقرص بحركة انسيابية.
+- **إدارة مخاطر**: حاسبة اللوت، باك-تيست لآخر 25 يوماً، أداء حسب المستوى، منحنى R.
+- **طاقم خبراء افتراضي**: 6 أدوار (نيويورك، طوكيو، TradingView/Pine، + 3 أدوار تحليلية) بمهام واقتراحات تطوير.
 
-## React Compiler
+## التشغيل محلياً
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev     # خادم التطوير
+npm run build   # بناء الإنتاج إلى dist/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## ربط MetaApi
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. أنشئ توكناً من: https://app.metaapi.cloud/token
+2. من لوحة MetaApi: اربط حساب MT4/MT5 وانتظر حالة **DEPLOYED**.
+3. أدخل Token + Account ID + رمز الذهب لدى وسيطك (XAUUSD أو ما يعادله) في لوحة الاتصال.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+> **الأمان**: التوكن يُحفظ في متصفحك فقط (localStorage) ويُرسل حصرياً إلى خوادم
+> MetaApi الرسمية. لا يوجد أي مفتاح داخل الكود.
+
+## النشر على Vercel
+
+1. ارفع المشروع إلى مستودع GitHub (زر Code → الجذر هو هذا المجلد كاملاً).
+2. في vercel.com: **Add New → Project** → استورد المستودع.
+3. سيتعرّف Vercel تلقائياً على Vite عبر `vercel.json`
+   (Build: `npm run build`، Output: `dist`). لا حاجة لأي متغيرات بيئة —
+   التطبيق واجهة أمامية خالصة وكل الأسرار تبقى في متصفح المستخدم.
+
+## بنية المشروع
+
 ```
+src/
+  App.tsx               التطبيق الرئيسي (الحالة والتنسيق)
+  lib/engine.ts         محرك التحليل: سيولة، CHoCH، FVG، أوردر بلوك، تقييم القوة
+  lib/metaapi.ts        عميل MetaApi: جلب تاريخي متصفّح للخلف + نبضة حية + فحص السعر
+  components/GoldChart.tsx   الشارت (lightweight-charts) + الطبقات + الزوم + ملء الشاشة
+  components/Panels.tsx      اللوحات: مستويات، إشارة، مخاطرة، باك-تيست، طاقم الخبراء
+```
+
+## إخلاء مسؤولية
+
+هذه المنصة أداة تحليل تعليمية وليست نصيحة استثمارية. تداول الذهب ينطوي على مخاطر عالية.

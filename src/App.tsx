@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import GoldChart from './components/GoldChart';
 import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
 import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
+import { DnaPanel } from './components/DnaPanel';
+import { buildTfLadder, buildWave, waveSpeech } from './lib/dna';
+import { unlockAudio, setVoice, beep as beepLib, speak, signalChime } from './lib/audio';
 import {
   analyzeDay, backtestFull, sessionOf, inKillZone, aggregate, detectWhales, analyzeConditions,
   type Candle, type DayAnalysis, type NewsEvent,
@@ -28,6 +31,8 @@ export default function App() {
   const [liveStatus, setLiveStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [liveError, setLiveError] = useState('');
   const [liveData, setLiveData] = useState<Candle[]>([]);
+  const [m1Data, setM1Data] = useState<Candle[]>([]);
+  const [m5Data, setM5Data] = useState<Candle[]>([]);
   const [dataInfo, setDataInfo] = useState('');
   const [priceWarn, setPriceWarn] = useState('');
   const regionRef = useRef<string>(loadRegion());
@@ -53,6 +58,11 @@ export default function App() {
       regionRef.current = region;
       const candles = await fetchHistory(c, region, 30);
       setLiveData(candles);
+      // سلالم الأطر الصغرى لخبير DNA: دقيقة (يوم) + 5 دقائق (3 أيام) — بالتوازي ولا تمنع الاتصال
+      void Promise.all([
+        fetchHistory(c, region, 1, '1m').then(setM1Data).catch(() => setM1Data([])),
+        fetchHistory(c, region, 3, '5m').then(setM5Data).catch(() => setM5Data([])),
+      ]);
       if (candles.length) {
         const from = new Date(candles[0].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
         const to = new Date(candles[candles.length - 1].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
@@ -82,22 +92,31 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creds]);
 
-  // تحديث الشمعة الحالية والسعر كل 5 ثوانٍ
+  // تحديث الشموع الحالية (15م + 1م) والسعر كل 5 ثوانٍ
   useEffect(() => {
     if (liveStatus !== 'ok' || !creds) return;
+    const merge = (prev: Candle[], cc: Candle) => {
+      if (!prev.length) return [cc];
+      const last = prev[prev.length - 1];
+      if (cc.time === last.time) return [...prev.slice(0, -1), cc];
+      if (cc.time > last.time) return [...prev, cc];
+      return prev;
+    };
     const id = setInterval(async () => {
       try {
-        const cc = await fetchCurrentCandle(creds, regionRef.current);
-        setLiveData((prev) => {
-          if (!prev.length) return [cc];
-          const last = prev[prev.length - 1];
-          if (cc.time === last.time) return [...prev.slice(0, -1), cc];
-          if (cc.time > last.time) return [...prev, cc];
-          return prev;
-        });
+        const [c15, c1] = await Promise.all([
+          fetchCurrentCandle(creds, regionRef.current),
+          fetchCurrentCandle(creds, regionRef.current, '1m'),
+        ]);
+        setLiveData((prev) => merge(prev, c15));
+        setM1Data((prev) => merge(prev, c1));
       } catch { /* تجاهل أخطاء النبضة الواحدة */ }
     }, 5000);
-    return () => clearInterval(id);
+    // تحديث تاريخ 5 دقائق كل ساعة
+    const id5 = setInterval(() => {
+      fetchHistory(creds, regionRef.current, 3, '5m').then(setM5Data).catch(() => { /* تجاهل */ });
+    }, 3600_000);
+    return () => { clearInterval(id); clearInterval(id5); };
   }, [liveStatus, creds]);
 
   const all = liveData;
@@ -118,6 +137,26 @@ export default function App() {
   const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, BT_DAYS) : null), [all]);
   const whales = useMemo(() => detectWhales(all), [all]);
   const conds = useMemo(() => analyzeConditions(all), [all]);
+  // خبير DNA: سلم الأطر الثمانية + موجة التداول
+  const tfLadder = useMemo(() => buildTfLadder(m1Data, m5Data, all), [m1Data, m5Data, all]);
+  const wave = useMemo(() => {
+    if (!tfLadder.length || !analysis) return null;
+    const un = analysis.levels
+      .filter((l) => !l.swept && l.kind !== 'OPEN' && Number.isFinite(l.price))
+      .map((l) => ({ label: l.label, price: l.price }));
+    return buildWave(tfLadder, analysis.lastPrice, un);
+  }, [tfLadder, analysis]);
+  // إعلان الموجة صوتياً عند تغيرها (بفاصل 4 دقائق)
+  const lastWaveVoice = useRef(0);
+  useEffect(() => {
+    if (!wave || dayOffset !== 0) return;
+    if (wave.dir === 'flat' || wave.strength < 35) return;
+    const t = Date.now();
+    if (t - lastWaveVoice.current < 240_000) return;
+    lastWaveVoice.current = t;
+    crewAlert(`🌊 يوسف النجار (خبير بصمة الشموع): ${waveSpeech(wave)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wave, dayOffset]);
   const [newsList, setNewsList] = useState<NewsEvent[]>([]);
   const [dbOk, setDbOk] = useState<boolean | null>(null);
   const displayCandles = useMemo(() => aggregate(all, tf), [all, tf]);
@@ -139,8 +178,9 @@ export default function App() {
     return last > avg * 1.0004 ? 'bullish' : last < avg * 0.9996 ? 'bearish' : 'neutral';
   }, [all]);
 
-  // تنبيه صوتي عند اكتمال إشارة جديدة (منسوب لخبير الاستراتيجيات)
+  // نظام الصوت: النغمات + النطق العربي — يُفتح قفل الصوت بأول لمسة في الصفحة
   const [soundOn, setSoundOn] = useState(true);
+  const [voiceOn, setVoiceOn] = useState(true);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (msg: string) => {
@@ -148,24 +188,28 @@ export default function App() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(''), 10000);
   };
-  const beep = (freq = 880) => {
-    if (!soundOn) return;
-    try {
-      const ac = new AudioContext();
-      const osc = ac.createOscillator();
-      const gain = ac.createGain();
-      osc.connect(gain); gain.connect(ac.destination);
-      osc.frequency.value = freq; gain.gain.value = 0.08;
-      osc.start(); osc.stop(ac.currentTime + 0.35);
-    } catch { /* الصوت غير متاح */ }
+  // إعلام طاقم كامل: نافذة + نغمة + نطق عربي
+  const crewAlert = (msg: string, chime = true) => {
+    showToast(msg);
+    if (soundOn && chime) signalChime(); else if (soundOn) beepLib(880);
+    speak(msg);
   };
+  // يُفتح قفل الصوت والنطق بأول لمسة في الصفحة (شرط المتصفحات)
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('touchstart', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+  }, []);
   const lastSigId = useRef<string>('');
   useEffect(() => {
     const s = analysis?.signals[0];
     if (!s || dayOffset !== 0) return;
     if (lastSigId.current && lastSigId.current !== s.id) {
-      showToast(`🔔 أليكس ريد (خبير الاستراتيجيات): إشارة ${s.side === 'long' ? 'شراء' : 'بيع'} @ ${s.entry} — وقف ${s.stop} — ${s.reason || 'حسب محرك ICT'}`);
-      beep(880);
+      crewAlert(`🔔 أليكس ريد (خبير الاستراتيجيات): إشارة ${s.side === 'long' ? 'شراء' : 'بيع'} عند ${s.entry} — وقف ${s.stop} — ${s.reason || 'حسب محرك ICT'}`);
     }
     lastSigId.current = s.id;
   }, [analysis, dayOffset, soundOn]);
@@ -177,11 +221,10 @@ export default function App() {
     if (!t || dayOffset !== 0) return;
     const kz = inKillZone(t);
     if (kz && !lastKz.current) {
-      showToast(`🔔 مايكل روس (خبير نيويورك): بدأ Kill Zone — أفضل نافذة تنفيذ، راقب السيولة غير المكتسحة`);
-      beep(1320);
+      crewAlert(`🔔 مايكل روس (خبير نيويورك): بدأت منطقة القتل — أفضل نافذة تنفيذ، راقب السيولة غير المكتسحة`);
     }
     if (!kz && lastKz.current) {
-      showToast(`🔔 كينجي ساتو (خبير طوكيو): انتهت نافذة الكيلزون — تقلب السوق سيهدأ الآن`);
+      crewAlert(`🔔 كينجي ساتو (خبير طوكيو): انتهت نافذة القتل — تقلب السوق سيهدأ الآن`, false);
     }
     lastKz.current = kz;
   }, [all, dayOffset, soundOn]);
@@ -202,7 +245,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V17</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V18</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -233,10 +276,24 @@ export default function App() {
         <div className="mr-auto flex items-center gap-3">
           <button
             onClick={() => setSoundOn((v) => !v)}
-            title="تنبيه صوتي عند الإشارات"
+            title="تنبيه نغمة عند الإشارات"
             className={`rounded-sm border px-2 py-1 text-[11px] transition ${soundOn ? 'border-amber-400/40 text-amber-300' : 'border-[#2a3a5f] text-slate-600'}`}
           >
             {soundOn ? '🔔' : '🔕'}
+          </button>
+          <button
+            onClick={() => { const nv = !voiceOn; setVoiceOn(nv); setVoice(nv); }}
+            title="إعلام صوتي منطوق بالعربية"
+            className={`rounded-sm border px-2 py-1 text-[11px] transition ${voiceOn ? 'border-emerald-400/40 text-emerald-300' : 'border-[#2a3a5f] text-slate-600'}`}
+          >
+            {voiceOn ? '🗣' : '🤐'}
+          </button>
+          <button
+            onClick={() => { unlockAudio(); beepLib(880); setTimeout(() => beepLib(1174), 250); speak('الصوت يعمل يا بطل'); }}
+            title="اختبار الصوت والنطق"
+            className="rounded-sm border border-[#2a3a5f] px-2 py-1 text-[11px] text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-300"
+          >
+            🔊
           </button>
           <span dir="ltr" className="font-mono text-[11px] text-slate-400">
             {clock.toISOString().slice(11, 19)} <span className="text-slate-600">UTC</span>
@@ -463,12 +520,13 @@ export default function App() {
             st={stats}
             lastCandleTime={all.length ? all[all.length - 1].time : 0}
             extra={{ news: newsList, whales, conds, dbOk }}
+            wave={wave}
           />
           <DevPanel st={stats} whales={whales} newsCount={newsList.filter((e) => e.time + 3600 > Date.now() / 1000).length} conds={conds} />
           <NewsPanel
             balance={account}
             riskPct={riskPct}
-            onAlert={showToast}
+            onAlert={crewAlert}
             onChange={setNewsList}
             ctx={analysis ? {
               bias: analysis.bias,
@@ -485,7 +543,8 @@ export default function App() {
               })(),
             } : null}
           />
-          <WhalePanel whales={whales} onAlert={showToast} onStatus={setDbOk} />
+          <WhalePanel whales={whales} onAlert={crewAlert} onStatus={setDbOk} />
+          <DnaPanel tfs={tfLadder} wave={wave} />
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
             بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.

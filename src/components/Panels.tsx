@@ -432,6 +432,7 @@ const EXPERT_META: ExpertDef[] = [
   { name: 'جيك ليفيت', role: 'خبير الحيتان — تدفق البنوك ورؤوس الأموال', color: '#22d3ee', proposal: 'فلتر تزامن: لا دخول إلا مع بصمة حجم مؤسسي' },
   { name: 'خبير Databento — أنا', role: 'صفقات المؤسسات من CME (عقد GC)', color: '#60a5fa', proposal: 'رصد أعماق السوق عبر MBP-10 لعقود الذهب' },
   { name: 'ماركو فيشر', role: 'متابعة استراتيجيات ومؤشرات المنصات الاحترافية', color: '#34d399', proposal: 'بناء إشارة مساعدة من أفضل شرط مؤشرات مثبت على بياناتنا' },
+  { name: 'يوسف النجار', role: 'خبير بصمة الشموع — Candle DNA', color: '#a78bfa', proposal: 'قراءة DNA كل شمعة عبر 8 أطر وتحويلها إلى موجة تداول بمسار مستهدفات' },
 ];
 
 export interface CrewExtra {
@@ -441,7 +442,9 @@ export interface CrewExtra {
   dbOk: boolean | null;
 }
 
-export function CrewPanel({ a, st, lastCandleTime, extra }: { a: DayAnalysis | null; st: BacktestFull | null; lastCandleTime: number; extra?: CrewExtra }) {
+export interface CrewWave { dir: 'up' | 'down' | 'flat'; strength: number; summary: string; path: { price: number; label: string }[]; }
+
+export function CrewPanel({ a, st, lastCandleTime, extra, wave }: { a: DayAnalysis | null; st: BacktestFull | null; lastCandleTime: number; extra?: CrewExtra; wave?: CrewWave | null }) {
   const [open, setOpen] = useState(true);
   const now = Math.floor(Date.now() / 1000);
   const kz = inKillZone(now);
@@ -499,6 +502,8 @@ export function CrewPanel({ a, st, lastCandleTime, extra }: { a: DayAnalysis | n
       const best = c[0];
       return `أفضل شرط على بياناتك: «${best.name}» — نجاح ${best.winRate}% في ${best.hits} حالة — ابنِ عليه`;
     })(),
+    // يوسف النجار — بصمة الشموع
+    wave ? `${wave.dir === 'flat' ? '◆ لا موجة الآن' : wave.dir === 'up' ? `▲ موجة صاعدة ${wave.strength}%` : `▼ موجة هابطة ${wave.strength}%`} — ${wave.path[0] ? `التالي: ${fmt(wave.path[0].price)} (${wave.path[0].label})` : 'أجمع بصمات الأطر…'}` : 'بانتظار سلالم الأطر الصغرى (دقيقة/5 دقائق)…',
   ];
 
   function autoDevCount(st2: BacktestFull | null, wl: number, nw: number, conds2?: ConditionStat[]): number {
@@ -543,7 +548,7 @@ export function CrewPanel({ a, st, lastCandleTime, extra }: { a: DayAnalysis | n
         <span className={`h-1.5 w-1.5 rounded-full ${kz ? 'animate-pulse bg-red-400' : 'bg-amber-400'}`} />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">طاقم الخبراء — مراقبة لحظية</h3>
         <div className="h-px flex-1 bg-[#1a2540]" />
-        <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (11)'}</span>
+        <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (12)'}</span>
       </button>
       {open && (
         <div className="space-y-1.5">

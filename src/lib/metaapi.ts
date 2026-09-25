@@ -122,10 +122,10 @@ function mapCandle(c: RawCandle): Candle {
 
 // شموع تاريخية M15 — واجهة MetaApi ترقّم للخلف من startTime:
 // نبدأ من الآن ونسحب 1000 شمعة في كل دفعة رجوعاً حتى نغطي المدة المطلوبة
-export async function fetchHistory(creds: MetaApiCreds, region: string, days: number): Promise<Candle[]> {
+export async function fetchHistory(creds: MetaApiCreds, region: string, days: number, timeframe = '15m'): Promise<Candle[]> {
   const base =
     `/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
-    `/historical-market-data/symbols/${encodeURIComponent(creds.symbol)}/timeframes/15m/candles`;
+    `/historical-market-data/symbols/${encodeURIComponent(creds.symbol)}/timeframes/${timeframe}/candles`;
 
   const map = (raw: RawCandle[]): Candle[] =>
     raw.map(mapCandle).sort((a, b) => a.time - b.time);
@@ -154,10 +154,10 @@ export async function fetchHistory(creds: MetaApiCreds, region: string, days: nu
 }
 
 // الشمعة الحالية (المتكونة الآن)
-export async function fetchCurrentCandle(creds: MetaApiCreds, region: string): Promise<Candle> {
+export async function fetchCurrentCandle(creds: MetaApiCreds, region: string, timeframe = '15m'): Promise<Candle> {
   const url =
     `/users/current/accounts/${encodeURIComponent(creds.accountId)}` +
-    `/symbols/${encodeURIComponent(creds.symbol)}/current-candles/15m`;
+    `/symbols/${encodeURIComponent(creds.symbol)}/current-candles/${timeframe}`;
   const raw: RawCandle = await apiFetchHosts(clientHosts(region), url, creds.token);
   return mapCandle(raw);
 }

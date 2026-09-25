@@ -411,7 +411,7 @@ export function SessionTimeline() {
 }
 
 // ---------- طاقم الخبراء — مراقبة لحظية وتنبيهات ----------
-import { sessionOf, inKillZone, type BacktestFull } from '../lib/engine';
+import { sessionOf, inKillZone, newsImpactNote, type BacktestFull, type NewsEvent, type WhalePrint, type ConditionStat } from '../lib/engine';
 
 interface ExpertDef {
   name: string;
@@ -427,9 +427,21 @@ const EXPERT_META: ExpertDef[] = [
   { name: 'المحلل الرئيسي — أنا', role: 'منسق تحليل السيولة ICT', color: '#a78bfa', proposal: 'دفتر صفقات (Journal) لقياس الانضباط' },
   { name: 'مهندس البيانات — أنا', role: 'موثوقية التغذية MetaApi', color: '#fbbf24', proposal: 'تنبيه تيليجرام عند انقطاع التغذية' },
   { name: 'مدير المخاطر — أنا', role: 'حماية رأس المال', color: '#e879f9', proposal: 'إحصاءات أداء حسب الجلسة' },
+  { name: 'مدير التطوير — أنا', role: 'دورة اقتراحات آلية ← اعتماد', color: '#fb923c', proposal: 'فلتر R:R ديناميكي حسب نسبة النجاح الأسبوعية' },
+  { name: 'لينا حداد', role: 'مديرة الأخبار الاقتصادية والجيوسياسية', color: '#f87171', proposal: 'حظر دخول آلي من 10 دقائق قبل الخبر حتى شمعة الإغلاق بعده' },
+  { name: 'جيك ليفيت', role: 'خبير الحيتان — تدفق البنوك ورؤوس الأموال', color: '#22d3ee', proposal: 'فلتر تزامن: لا دخول إلا مع بصمة حجم مؤسسي' },
+  { name: 'خبير Databento — أنا', role: 'صفقات المؤسسات من CME (عقد GC)', color: '#60a5fa', proposal: 'رصد أعماق السوق عبر MBP-10 لعقود الذهب' },
+  { name: 'ماركو فيشر', role: 'متابعة استراتيجيات ومؤشرات المنصات الاحترافية', color: '#34d399', proposal: 'بناء إشارة مساعدة من أفضل شرط مؤشرات مثبت على بياناتنا' },
 ];
 
-export function CrewPanel({ a, st, lastCandleTime }: { a: DayAnalysis | null; st: BacktestFull | null; lastCandleTime: number }) {
+export interface CrewExtra {
+  news: NewsEvent[];
+  whales: WhalePrint[];
+  conds: ConditionStat[];
+  dbOk: boolean | null;
+}
+
+export function CrewPanel({ a, st, lastCandleTime, extra }: { a: DayAnalysis | null; st: BacktestFull | null; lastCandleTime: number; extra?: CrewExtra }) {
   const [open, setOpen] = useState(true);
   const now = Math.floor(Date.now() / 1000);
   const kz = inKillZone(now);
@@ -457,7 +469,54 @@ export function CrewPanel({ a, st, lastCandleTime }: { a: DayAnalysis | null; st
       : minsAgo <= 1 ? `البيانات حية — آخر شمعة قبل ${minsAgo} دقيقة`
       : `⚠️ آخر شمعة قبل ${minsAgo} دقيقة — تحقق من الاتصال`,
     st ? `أقصى تراجع ${st.maxDrawdownR}R — ثبّت المخاطرة 1% ولا ترفعها بعد الخسارة` : 'ثبّت المخاطرة 1% لكل صفقة',
+    // مدير التطوير
+    autoDevCount(st, extra?.whales.length ?? 0, extra?.news.length ?? 0, extra?.conds)
+      ? `${autoDevCount(st, extra?.whales.length ?? 0, extra?.news.length ?? 0, extra?.conds)} اقتراح تطوير في دورة العرض — الأحدث: ${latestDev(st, extra)}`
+      : 'لا اقتراحات تطوير مفتوحة — النظام مستقر',
+    // مديرة الأخبار
+    (() => {
+      const next = (extra?.news ?? []).filter((e) => e.time > now).sort((x, y) => x.time - y.time)[0];
+      if (!next) return 'لا أخبار مجدولة — أضف أخبارك من لوحة الأخبار للحصول على توقع وتنبيه';
+      const mins = Math.round((next.time - now) / 60);
+      return `${mins > 0 ? `الخبر القادم بعد ${mins} دقيقة` : 'خبر الآن'}: «${next.title}» — ${newsImpactNote(next).move}`;
+    })(),
+    // خبير الحيتان
+    (() => {
+      const w = (extra?.whales ?? [])[extra!.whales.length - 1];
+      return w
+        ? `آخر بصمة ${w.side} @ ${fmt(w.price)} (${w.rangeX.toFixed(1)}× المدى) — ${(extra?.whales.length ?? 0) > 1 ? 'نشاط مؤسسي متكرر، راقب الامتداد' : 'راقب هل تُتبع باستمرارية'}`
+        : 'لا بصمات حيتان مرصودة — السيولة هادئة، لا تطارد الصفقة الكبيرة الآن';
+    })(),
+    // خبير Databento
+    extra?.dbOk === true ? 'تغذية Databento متصلة — اضغط «فحص الحيتان» لسحب صفقات GC المؤسسية'
+      : extra?.dbOk === false ? 'مفتاح Databento غير متصل — أدخله في لوحة الحيتان للحصول على بيانات البنوك'
+      : 'تغذية Databento غير مهيأة — أدخل المفتاح لرصد صفقات المؤسسات من CME',
+    // ماركو فيشر — استراتيجيات المنصات
+    (() => {
+      const c = extra?.conds ?? [];
+      if (!c.length) return 'جارٍ جمع عينة كافية من بياناتك لتقييم شروط المؤشرات…';
+      const best = c[0];
+      return `أفضل شرط على بياناتك: «${best.name}» — نجاح ${best.winRate}% في ${best.hits} حالة — ابنِ عليه`;
+    })(),
   ];
+
+  function autoDevCount(st2: BacktestFull | null, wl: number, nw: number, conds2?: ConditionStat[]): number {
+    let n = 0;
+    if (st2 && (st2.winRate < 45 || st2.expectancyR > 0 || st2.maxDrawdownR > 6)) n++;
+    if (wl >= 2) n++;
+    if (nw > 0) n++;
+    if (conds2?.length && conds2[0].winRate >= 55) n++;
+    return n;
+  }
+  function latestDev(st2: BacktestFull | null, ex?: CrewExtra): string {
+    if (st2 && st2.winRate < 45) return 'شدّد فلتر R:R إلى 1:2.5';
+    if (st2 && st2.maxDrawdownR > 6) return 'حظر التداول بعد خسارتين متتاليتين';
+    if ((ex?.whales.length ?? 0) >= 2) return 'فلتر تزامن مع بصمات الحجم';
+    if ((ex?.news.length ?? 0) > 0) return 'حظر دخول آلي وقت الأخبار';
+    if (ex?.conds?.length && ex.conds[0].winRate >= 55) return `إشارة مساعدة من «${ex.conds[0].name}»`;
+    if (st2) return 'دخول ثانٍ بعد الهدف الأول';
+    return 'بانتظار البيانات';
+  }
 
   // آخر أحداث الطاقم (منسوبة)
   const feed: { t: number; who: string; color: string; msg: string }[] = [];
@@ -467,6 +526,13 @@ export function CrewPanel({ a, st, lastCandleTime }: { a: DayAnalysis | null; st
     }
     const s = a.signals[0];
     if (s) feed.push({ t: s.time, who: 'خبير الاستراتيجيات', color: '#22d3ee', msg: `تفعيل ${s.side === 'long' ? 'شراء' : 'بيع'} @ ${fmt(s.entry)} — R:R 1:${s.rr}` });
+    for (const w of (extra?.whales ?? []).slice(-2)) {
+      feed.push({ t: w.time, who: 'خبير الحيتان', color: '#22d3ee', msg: `بصمة ${w.side} @ ${fmt(w.price)} — مدى ${w.range.toFixed(1)}$` });
+    }
+    const nextEv = (extra?.news ?? []).filter((e) => e.time > now).sort((x, y) => x.time - y.time)[0];
+    if (nextEv) feed.push({ t: nextEv.time, who: 'مديرة الأخبار', color: '#f87171', msg: `مجدول: «${nextEv.title}» — ${newsImpactNote(nextEv).move}` });
+    const bestCond = extra?.conds?.[0];
+    if (bestCond && bestCond.winRate >= 55) feed.push({ t: now, who: 'ماركو فيشر', color: '#34d399', msg: `توصية بناء: «${bestCond.name}» نجح ${bestCond.winRate}% — جرّبه على 0.01` });
     feed.sort((x, y) => y.t - x.t);
   }
 
@@ -476,7 +542,7 @@ export function CrewPanel({ a, st, lastCandleTime }: { a: DayAnalysis | null; st
         <span className={`h-1.5 w-1.5 rounded-full ${kz ? 'animate-pulse bg-red-400' : 'bg-amber-400'}`} />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">طاقم الخبراء — مراقبة لحظية</h3>
         <div className="h-px flex-1 bg-[#1a2540]" />
-        <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (6)'}</span>
+        <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (11)'}</span>
       </button>
       {open && (
         <div className="space-y-1.5">

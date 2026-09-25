@@ -8,6 +8,7 @@ export interface Candle {
   high: number;
   low: number;
   close: number;
+  volume?: number; // حجم التيكات من MetaApi
 }
 
 export type LevelKind = 'ASIA_H' | 'ASIA_L' | 'PDH' | 'PDL' | 'OPEN' | 'SUP' | 'RES'
@@ -758,4 +759,172 @@ export function detectOrderBlocks(candles: Candle[], lookback = 200): OrderBlock
     out.push(ob);
   }
   return out.slice(-10); // آخر 10 بلوكات فقط حفاظاً على وضوح الشارت
+}
+
+// ============================================================
+// V16: الحيتان + الأخبار + تحليل الشروط (استراتيجيات المنصات)
+// ============================================================
+
+export interface WhalePrint {
+  time: number;
+  price: number;
+  side: 'شراء عدواني' | 'بيع عدواني';
+  range: number;      // مدى الشمعة $
+  volume: number;     // حجم التيكات
+  rangeX: number;     // مضاعف متوسط المدى
+  volX: number;       // مضاعف متوسط الحجم
+  score: number;      // مركّب
+}
+
+// رصد بصمات الحيتان: شمعة مداها وحجمها أعلى من المعتاد بشكل واضح
+export function detectWhales(candles: Candle[], lookback = 96): WhalePrint[] {
+  if (candles.length < 30) return [];
+  const n = candles.length;
+  const start = Math.max(1, n - lookback - 20);
+  const base = candles.slice(Math.max(0, n - lookback - 96), start + 20);
+  const avgRange = base.reduce((a, c) => a + (c.high - c.low), 0) / base.length;
+  const withVol = base.filter((c) => c.volume && c.volume > 0);
+  const avgVol = withVol.length ? withVol.reduce((a, c) => a + (c.volume ?? 0), 0) / withVol.length : 0;
+  const out: WhalePrint[] = [];
+  for (let i = Math.max(start, n - lookback); i < n; i++) {
+    const c = candles[i];
+    const range = c.high - c.low;
+    const vol = c.volume ?? 0;
+    const rangeX = avgRange > 0 ? range / avgRange : 0;
+    const volX = avgVol > 0 ? vol / avgVol : 0;
+    const volOk = avgVol === 0 || volX >= 1.8;
+    if (rangeX >= 1.8 && volOk) {
+      out.push({
+        time: c.time,
+        price: c.close,
+        side: c.close >= c.open ? 'شراء عدواني' : 'بيع عدواني',
+        range: range,
+        volume: vol,
+        rangeX, volX,
+        score: rangeX * volX,
+      });
+    }
+  }
+  return out.slice(-8);
+}
+
+// ---------- وحدة الأخبار الاقتصادية والجيوسياسية ----------
+
+export type NewsImpact = 'high' | 'medium' | 'low';
+
+export interface NewsEvent {
+  id: string;
+  time: number;        // unix seconds UTC
+  title: string;
+  currency: string;    // USD / XAU / ALL
+  impact: NewsImpact;
+  forecast: string;
+  previous: string;
+  actual?: string;
+  outcome?: 'صعود' | 'هبوط' | 'ثبات';
+  outcomeMove?: number; // حركة الذهب بعده بالدولار
+}
+
+export const NEWS_PRESETS: { title: string; currency: string; impact: NewsImpact; forecast: string; previous: string }[] = [
+  { title: 'تقرير التوظيف الأمريكي NFP', currency: 'USD', impact: 'high', forecast: '', previous: '' },
+  { title: 'مؤشر أسعار المستهلك CPI', currency: 'USD', impact: 'high', forecast: '', previous: '' },
+  { title: 'قرار الفائدة الفيدرالي FOMC + مؤتمر باول', currency: 'USD', impact: 'high', forecast: '', previous: '' },
+  { title: 'محضر اجتماع الفيدرالي', currency: 'USD', impact: 'medium', forecast: '', previous: '' },
+  { title: 'مؤشر أسعار المنتجين PPI', currency: 'USD', impact: 'medium', forecast: '', previous: '' },
+  { title: 'مبيعات التجزئة', currency: 'USD', impact: 'medium', forecast: '', previous: '' },
+  { title: 'خطاب باول / مسؤولي الفيدرالي', currency: 'USD', impact: 'high', forecast: '', previous: '' },
+  { title: 'أزمة جيوسياسية (توترات/حرب/عقوبات)', currency: 'ALL', impact: 'high', forecast: '', previous: '' },
+];
+
+// توقع تأثير الخبر على الذهب وفق طبيعته
+export function newsImpactNote(ev: NewsEvent): { move: string; dir: string; note: string } {
+  const t = ev.title;
+  if (/NFP|توظيف|CPI|فائدة|FOMC|باول/.test(t)) {
+    return {
+      move: 'حركة متوقعة 15–30$ خلال أول 15 دقيقة',
+      dir: 'ثنائية الاتجاه — انعكاسات حادة شائعة',
+      note: 'الدولار يتحرك عكس الذهب غالباً. الأرقام الأقوى من المتوقع = ضغط على الذهب أولاً، ثم قد ينعكس بعد امتصاص السيولة.',
+    };
+  }
+  if (/جيوسياسية|حرب|توترات|عقوبات|أزمة/.test(t)) {
+    return {
+      move: 'حركة متوقعة 10–25$ وقد تمتد',
+      dir: 'صعود الذهب (ملاذ آمن) في التصعيد، وتراجعه عند التهدئة',
+      note: 'الذهب يرتفع مع تصاعد التوتر ويهبط مع الإعلان عن تهدئة أو اتفاق. الفتيل الطويل فوق القمة = سيولة تُمتص ثم يكمل الصعود.',
+    };
+  }
+  return {
+    move: 'حركة متوقعة 8–15$',
+    dir: 'محدودة الاتجاه',
+    note: 'راقب هل تؤكد الحركة اتجاه اليوم أم تعكسه — لا تخترق السوق قبل شمعة إغلاق كاملة بعد الخبر.',
+  };
+}
+
+// توصية اللوت لاستغلال الخبر وفق قاعدة المخاطرة
+// 0.01 لوت على الذهب = 1$ ربح لكل 1$ حركة
+export function newsLotSuggestion(balance: number, riskPct: number, stopDistance: number): { lot: number; riskUsd: number; target10: number } {
+  const riskUsd = balance * (riskPct / 100);
+  const raw = stopDistance > 0 ? riskUsd / stopDistance : 0;
+  const lot = Math.max(0.01, Math.floor(raw * 100) / 100);
+  // عدد الدولارات حركة مطلوبة لتحقيق 10$ على هذا اللوت
+  const target10 = lot > 0 ? 10 / lot : 0;
+  return { lot, riskUsd, target10 };
+}
+
+// ---------- محلل الشروط: أي شروط المؤشرات نجحت على بياناتك؟ ----------
+
+export interface ConditionStat {
+  name: string;
+  hits: number;
+  winRate: number;   // % إغلاقات مربحة خلال 8 شمعات لاحقة
+  avgMove: number;   // متوسط الحركة اللاحقة $
+}
+
+// يقيس نجاح شروط شائعة من عالم المؤشرات/الاستراتيجيات على بيانات المنصة الفعلية
+export function analyzeConditions(candles: Candle[], lookback = 480): ConditionStat[] {
+  if (candles.length < 60) return [];
+  const n = candles.length;
+  const start = Math.max(30, n - lookback);
+  const closes = candles.map((c) => c.close);
+
+  const rsi = (i: number, period = 14): number => {
+    let g = 0, l = 0;
+    for (let k = i - period; k < i; k++) {
+      const d = closes[k] - closes[k - 1];
+      if (d >= 0) g += d; else l -= d;
+    }
+    return l === 0 ? 100 : 100 - 100 / (1 + g / l);
+  };
+
+  const stats = (name: string, cond: (i: number) => boolean): ConditionStat => {
+    let hits = 0, wins = 0, sum = 0;
+    for (let i = start; i < n - 8; i++) {
+      if (!cond(i)) continue;
+      hits++;
+      const fwd = candles[i + 8].close - candles[i].close;
+      sum += fwd;
+      if (Math.abs(fwd) > 3) wins++; // حركة ≥ 3$ خلال ساعتين = فرصة قابلة للتداول
+    }
+    return { name, hits, winRate: hits ? Math.round((wins / hits) * 100) : 0, avgMove: hits ? +(sum / hits).toFixed(1) : 0 };
+  };
+
+  const ema = (i: number, period: number): number => {
+    const k = 2 / (period + 1);
+    let e = closes[Math.max(0, i - period * 3)];
+    for (let j = Math.max(1, i - period * 3); j <= i; j++) e = closes[j] * k + e * (1 - k);
+    return e;
+  };
+
+  return [
+    stats('RSI(14) < 30 (تشبع بيعي)', (i) => rsi(i) < 30),
+    stats('RSI(14) > 70 (تشبع شرائي)', (i) => rsi(i) > 70),
+    stats('تقاطع EMA9 فوق EMA21', (i) => ema(i, 9) > ema(i, 21) && ema(i - 1, 9) <= ema(i - 1, 21)),
+    stats('تقاطع EMA9 تحت EMA21', (i) => ema(i, 9) < ema(i, 21) && ema(i - 1, 9) >= ema(i - 1, 21)),
+    stats('شمعة خارج Kill Zone + اندفاع', (i) => {
+      const c = candles[i];
+      return !inKillZone(c.time) && (c.high - c.low) > 5;
+    }),
+    stats('كسر قمة 8 شمعات (زخم)', (i) => candles[i].close > Math.max(...candles.slice(i - 8, i).map((c) => c.high))),
+    stats('كسر قاع 8 شمعات (زخم)', (i) => candles[i].close < Math.min(...candles.slice(i - 8, i).map((c) => c.low))),
+  ].filter((c) => c.hits >= 3).sort((x, y) => y.winRate - x.winRate);
 }

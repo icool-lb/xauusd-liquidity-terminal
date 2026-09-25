@@ -109,12 +109,14 @@ interface RawCandle {
   high: number;
   low: number;
   close: number;
+  volume?: number;
 }
 
 function mapCandle(c: RawCandle): Candle {
   return {
     time: Math.floor(new Date(c.time).getTime() / 1000),
     open: c.open, high: c.high, low: c.low, close: c.close,
+    volume: c.volume ?? 0,
   };
 }
 

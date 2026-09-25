@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import GoldChart from './components/GoldChart';
 import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
+import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
 import {
-  analyzeDay, backtestFull, sessionOf, inKillZone, aggregate,
-  type Candle, type DayAnalysis,
+  analyzeDay, backtestFull, sessionOf, inKillZone, aggregate, detectWhales, analyzeConditions,
+  type Candle, type DayAnalysis, type NewsEvent,
 } from './lib/engine';
 import {
   loadCreds, saveCreds, loadRegion, resolveAccount, fetchHistory, fetchCurrentCandle, fetchPrice,
@@ -115,6 +116,10 @@ export default function App() {
     [all, effDayStart]
   );
   const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, BT_DAYS) : null), [all]);
+  const whales = useMemo(() => detectWhales(all), [all]);
+  const conds = useMemo(() => analyzeConditions(all), [all]);
+  const [newsList, setNewsList] = useState<NewsEvent[]>([]);
+  const [dbOk, setDbOk] = useState<boolean | null>(null);
   const displayCandles = useMemo(() => aggregate(all, tf), [all, tf]);
 
   // تحيز H1: إغلاق آخر ساعة مقابل متوسط آخر 8 ساعات
@@ -197,7 +202,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V15</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V16</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -453,7 +458,15 @@ export default function App() {
           {stats && <StatsPanel st={stats} />}
           {stats && <EquityCurve st={stats} />}
           {stats && <LevelStats st={stats} />}
-          <CrewPanel a={analysis} st={stats} lastCandleTime={all.length ? all[all.length - 1].time : 0} />
+          <CrewPanel
+            a={analysis}
+            st={stats}
+            lastCandleTime={all.length ? all[all.length - 1].time : 0}
+            extra={{ news: newsList, whales, conds, dbOk }}
+          />
+          <DevPanel st={stats} whales={whales} newsCount={newsList.filter((e) => e.time + 3600 > Date.now() / 1000).length} conds={conds} />
+          <NewsPanel balance={account} riskPct={riskPct} onAlert={showToast} onChange={setNewsList} />
+          <WhalePanel whales={whales} onAlert={showToast} onStatus={setDbOk} />
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
             بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.

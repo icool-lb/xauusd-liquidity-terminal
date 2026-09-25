@@ -410,91 +410,108 @@ export function SessionTimeline() {
   );
 }
 
-// ---------- طاقم الخبراء — توزيع المهام والتطوير ----------
-interface Expert {
+// ---------- طاقم الخبراء — مراقبة لحظية وتنبيهات ----------
+import { sessionOf, inKillZone, type BacktestFull } from '../lib/engine';
+
+interface ExpertDef {
   name: string;
   role: string;
   color: string;
-  task: string;
   proposal: string;
 }
 
-const EXPERTS: Expert[] = [
-  {
-    name: 'مايكل روس',
-    role: 'خبير مالي — بورصة نيويورك (NYSE/COMEX)',
-    color: '#f87171',
-    task: 'متابعة جلسة نيويورك: سيولة COMEX المفتوحة، تدفق صناديق الذهب، وأخبار الفائدة والتضخم لحظة صدورها.',
-    proposal: 'تكامل تقويم الأخبار الاقتصادية (CPI / FOMC / NFP) مع حظر الدخول الآلي وقت الإصدار وتلوينه على الخط الزمني.',
-  },
-  {
-    name: 'كينجي ساتو',
-    role: 'خبير مالي — بورصة طوكيو (TSE)',
-    color: '#34d399',
-    task: 'قياس نطاق آسيا يومياً قبل افتتاح لندن، ومقارنته بنطاق الأمس لتوقّع اتساع أو تضيّق التقلبات.',
-    proposal: 'تقرير صباحي آلي: نسبة اتساع آسيا إلى متوسط 5 أيام كمؤشر جاهزية، مع تنبيه إذا ضاق النطاق بشكل غير مألوف.',
-  },
-  {
-    name: 'أليكس ريد',
-    role: 'خبير استراتيجيات التداول والبرمجة — TradingView',
-    color: '#22d3ee',
-    task: 'صيانة استراتيجية Pine Script (سحب سيولة ← CHoCH ← دخول) وتحسين شروطها من نتائج الباك-تيست الأسبوعية.',
-    proposal: 'مزامنة إشارات المنصة مع TradingView عبر Webhook، وتنبيه فوري يصل قبل إغلاق شمعة التفعيل.',
-  },
-  {
-    name: 'المحلل الرئيسي — أنا',
-    role: 'منسق تحليل السيولة (ICT/SMC)',
-    color: '#a78bfa',
-    task: 'مراجعة سحوبات اليوم وتصنيف قوة كل مستوى (قوي/متوسط/ضعيف) وتوثيق الأوردر بلوك المُختبرة.',
-    proposal: 'دفتر صفقات يدوي (Journal) يقارن النتيجة الفعلية بالخطة، لكشف الانحرافات المتكررة عن القواعد.',
-  },
-  {
-    name: 'مهندس البيانات — أنا',
-    role: 'موثوقية التغذية — MetaApi',
-    color: '#fbbf24',
-    task: 'مراقبة عمق التاريخ وجودة التغذية كل 15 ثانية، والتحقق الدائم من تطابق الرمز مع السعر اللحظي للوسيط.',
-    proposal: 'تنبيه تيليجرام فوري عند انقطاع التغذية أو فرق السعر عن السوق أكثر من 1.5%.',
-  },
-  {
-    name: 'مدير المخاطر — أنا',
-    role: 'حماية رأس المال',
-    color: '#e879f9',
-    task: 'تطبيق قاعدة المخاطرة لكل صفقة، حساب اللوت تلقائياً، وباك-تيست أسبوعي على آخر 25 يوماً.',
-    proposal: 'إحصاءات أداء حسب الجلسة واليوم (لندن مقابل نيويورك) لاختيار أفضل نافذة دخول وتقليل أيام الخسارة.',
-  },
+const EXPERT_META: ExpertDef[] = [
+  { name: 'مايكل روس', role: 'خبير مالي — بورصة نيويورك', color: '#f87171', proposal: 'تقويم أخبار مع حظر دخول آلي وقت الإصدارات' },
+  { name: 'كينجي ساتو', role: 'خبير مالي — بورصة طوكيو', color: '#34d399', proposal: 'تقرير صباحي: اتساع آسيا مقارنة بمتوسط 5 أيام' },
+  { name: 'أليكس ريد', role: 'خبير استراتيجيات + TradingView', color: '#22d3ee', proposal: 'مزامنة الإشارات مع TradingView عبر Webhook' },
+  { name: 'المحلل الرئيسي — أنا', role: 'منسق تحليل السيولة ICT', color: '#a78bfa', proposal: 'دفتر صفقات (Journal) لقياس الانضباط' },
+  { name: 'مهندس البيانات — أنا', role: 'موثوقية التغذية MetaApi', color: '#fbbf24', proposal: 'تنبيه تيليجرام عند انقطاع التغذية' },
+  { name: 'مدير المخاطر — أنا', role: 'حماية رأس المال', color: '#e879f9', proposal: 'إحصاءات أداء حسب الجلسة' },
 ];
 
-export function CrewPanel() {
-  const [open, setOpen] = useState(false);
+export function CrewPanel({ a, st, lastCandleTime }: { a: DayAnalysis | null; st: BacktestFull | null; lastCandleTime: number }) {
+  const [open, setOpen] = useState(true);
+  const now = Math.floor(Date.now() / 1000);
+  const kz = inKillZone(now);
+  const sess = sessionOf(now);
+  const price = a?.lastPrice ?? 0;
+
+  // رصد لحظي لكل خبير من بيانات المنصة الفعلية
+  const unswept = a?.levels.filter((l) => !l.swept && l.kind !== 'OPEN' && Number.isFinite(l.price)) ?? [];
+  const above = [...unswept].filter((l) => l.price > price).sort((x, y) => x.price - y.price)[0];
+  const below = [...unswept].filter((l) => l.price < price).sort((x, y) => y.price - x.price)[0];
+  const asiaW = a ? a.asiaHigh - a.asiaLow : 0;
+  const minsAgo = lastCandleTime ? Math.max(0, Math.round((now - lastCandleTime) / 60)) : null;
+
+  const lines: string[] = [
+    kz
+      ? `⚡ منطقة قتل ${sess === 'london' ? 'لندن' : 'نيويورك'} نشطة — ${above ? `راقب سحب ${above.label} ${fmt(above.price)}` : 'لا سيولة علوية'} / ${below ? `${below.label} ${fmt(below.price)}` : 'لا سيولة سفلية'}`
+      : 'الصيد متوقف خارج مناطق القتل (07–10 / 12–15 UTC)',
+    !a ? 'بانتظار بيانات آسيا…'
+      : asiaW < 8 ? `نطاق آسيا ضيق (${asiaW.toFixed(1)}$) — توقّع اختراق حاد مع لندن`
+      : asiaW > 16 ? `نطاق آسيا واسع (${asiaW.toFixed(1)}$) — السيولة بعيدة، انتظر السحب أولاً`
+      : `نطاق آسيا طبيعي (${asiaW.toFixed(1)}$)`,
+    st ? `الباك-تيست: ${st.winRate}% نجاح على ${st.total} إشارة — التوقع ${st.expectancyR >= 0 ? '+' : ''}${st.expectancyR}R ${st.expectancyR > 0 ? '— الاستراتيجية جاهزة' : '— حذر'}` : 'لا نتائج باك-تيست كافية بعد',
+    a ? `${a.sweeps.length} سحب سيولة اليوم — ${unswept.length} مستويات لم تُسحب بعد` : 'لا تحليل بعد',
+    minsAgo === null ? 'غير متصل بمصدر البيانات'
+      : minsAgo <= 1 ? `البيانات حية — آخر شمعة قبل ${minsAgo} دقيقة`
+      : `⚠️ آخر شمعة قبل ${minsAgo} دقيقة — تحقق من الاتصال`,
+    st ? `أقصى تراجع ${st.maxDrawdownR}R — ثبّت المخاطرة 1% ولا ترفعها بعد الخسارة` : 'ثبّت المخاطرة 1% لكل صفقة',
+  ];
+
+  // آخر أحداث الطاقم (منسوبة)
+  const feed: { t: number; who: string; color: string; msg: string }[] = [];
+  if (a) {
+    for (const sw of a.sweeps.slice(-4)) {
+      feed.push({ t: sw.time, who: 'المحلل الرئيسي', color: '#a78bfa', msg: `سحب ${sw.levelLabel} — اختراق ${sw.penetration}$ ثم عودة` });
+    }
+    const s = a.signals[0];
+    if (s) feed.push({ t: s.time, who: 'خبير الاستراتيجيات', color: '#22d3ee', msg: `تفعيل ${s.side === 'long' ? 'شراء' : 'بيع'} @ ${fmt(s.entry)} — R:R 1:${s.rr}` });
+    feed.sort((x, y) => y.t - x.t);
+  }
+
   return (
     <div>
       <button onClick={() => setOpen((v) => !v)} className="mb-2 flex w-full items-center gap-2 text-right">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">طاقم الخبراء — توزيع المهام</h3>
+        <span className={`h-1.5 w-1.5 rounded-full ${kz ? 'animate-pulse bg-red-400' : 'bg-amber-400'}`} />
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">طاقم الخبراء — مراقبة لحظية</h3>
         <div className="h-px flex-1 bg-[#1a2540]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (6)'}</span>
       </button>
       {open && (
-        <div className="space-y-2">
-          {EXPERTS.map((e, i) => (
+        <div className="space-y-1.5">
+          {EXPERT_META.map((e, i) => (
             <div key={i} className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2">
               <div className="mb-1 flex items-center gap-1.5">
                 <span className="flex h-5 w-5 items-center justify-center rounded-sm text-[10px] font-black" style={{ background: e.color + '22', color: e.color }}>
                   {e.name[0]}
                 </span>
-                <div>
+                <div className="flex-1">
                   <div className="text-[11px] font-bold leading-none text-white">{e.name}</div>
                   <div className="mt-0.5 text-[8.5px] text-slate-500">{e.role}</div>
                 </div>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: e.color, opacity: kz && i === 0 ? 1 : 0.5 }} />
               </div>
-              <p className="mb-1 text-[10px] leading-relaxed text-slate-400">
-                <span className="font-bold text-slate-300">مهمة اليوم: </span>{e.task}
-              </p>
-              <p className="text-[10px] leading-relaxed text-slate-500">
-                <span className="font-bold" style={{ color: e.color }}>اقتراح التطوير: </span>{e.proposal}
+              <p className="text-[10px] leading-relaxed text-slate-300">{lines[i]}</p>
+              <p className="mt-0.5 text-[9px] leading-relaxed text-slate-600">
+                <span style={{ color: e.color }}>تطوير مقترح: </span>{e.proposal}
               </p>
             </div>
           ))}
+          {feed.length > 0 && (
+            <div className="rounded-sm border border-[#1a2540] bg-[#080c16] p-2">
+              <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.15em] text-slate-500">آخر أحداث الطاقم</div>
+              {feed.slice(0, 4).map((f, i) => (
+                <div key={i} className="flex items-start gap-1.5 py-0.5 text-[10px] text-slate-400">
+                  <span className="mt-0.5 font-mono text-[8.5px] text-slate-600" dir="ltr">
+                    {new Date(f.t * 1000).toISOString().slice(11, 16)}
+                  </span>
+                  <span className="shrink-0 font-bold" style={{ color: f.color }}>{f.who}:</span>
+                  <span>{f.msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

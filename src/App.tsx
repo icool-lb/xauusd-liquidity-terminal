@@ -134,29 +134,52 @@ export default function App() {
     return last > avg * 1.0004 ? 'bullish' : last < avg * 0.9996 ? 'bearish' : 'neutral';
   }, [all]);
 
-  // تنبيه صوتي عند اكتمال إشارة جديدة
+  // تنبيه صوتي عند اكتمال إشارة جديدة (منسوب لخبير الاستراتيجيات)
   const [soundOn, setSoundOn] = useState(true);
   const [toast, setToast] = useState('');
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 10000);
+  };
+  const beep = (freq = 880) => {
+    if (!soundOn) return;
+    try {
+      const ac = new AudioContext();
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.connect(gain); gain.connect(ac.destination);
+      osc.frequency.value = freq; gain.gain.value = 0.08;
+      osc.start(); osc.stop(ac.currentTime + 0.35);
+    } catch { /* الصوت غير متاح */ }
+  };
   const lastSigId = useRef<string>('');
   useEffect(() => {
     const s = analysis?.signals[0];
     if (!s || dayOffset !== 0) return;
     if (lastSigId.current && lastSigId.current !== s.id) {
-      setToast(`إشارة جديدة: ${s.side === 'long' ? 'شراء' : 'بيع'} @ ${s.entry} — وقف ${s.stop}`);
-      if (soundOn) {
-        try {
-          const ac = new AudioContext();
-          const osc = ac.createOscillator();
-          const gain = ac.createGain();
-          osc.connect(gain); gain.connect(ac.destination);
-          osc.frequency.value = 880; gain.gain.value = 0.08;
-          osc.start(); osc.stop(ac.currentTime + 0.35);
-        } catch { /* الصوت غير متاح */ }
-      }
-      setTimeout(() => setToast(''), 9000);
+      showToast(`🔔 أليكس ريد (خبير الاستراتيجيات): إشارة ${s.side === 'long' ? 'شراء' : 'بيع'} @ ${s.entry} — وقف ${s.stop} — ${s.reason || 'حسب محرك ICT'}`);
+      beep(880);
     }
     lastSigId.current = s.id;
   }, [analysis, dayOffset, soundOn]);
+
+  // تنبيه بداية/نهاية الكيلزون (منسوب لخبير نيويورك وخبير طوكيو)
+  const lastKz = useRef(false);
+  useEffect(() => {
+    const t = all.length ? all[all.length - 1].time : 0;
+    if (!t || dayOffset !== 0) return;
+    const kz = inKillZone(t);
+    if (kz && !lastKz.current) {
+      showToast(`🔔 مايكل روس (خبير نيويورك): بدأ Kill Zone — أفضل نافذة تنفيذ، راقب السيولة غير المكتسحة`);
+      beep(1320);
+    }
+    if (!kz && lastKz.current) {
+      showToast(`🔔 كينجي ساتو (خبير طوكيو): انتهت نافذة الكيلزون — تقلب السوق سيهدأ الآن`);
+    }
+    lastKz.current = kz;
+  }, [all, dayOffset, soundOn]);
 
   const lastPrice = all.length ? all[all.length - 1].close : 0;
   const prevPrice = all.length > 1 ? all[all.length - 2].close : lastPrice;
@@ -174,7 +197,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V14</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V15</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -430,7 +453,7 @@ export default function App() {
           {stats && <StatsPanel st={stats} />}
           {stats && <EquityCurve st={stats} />}
           {stats && <LevelStats st={stats} />}
-          <CrewPanel />
+          <CrewPanel a={analysis} st={stats} lastCandleTime={all.length ? all[all.length - 1].time : 0} />
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
             بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.

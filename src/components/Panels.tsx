@@ -473,12 +473,13 @@ export function CrewPanel({ a, st, lastCandleTime, extra }: { a: DayAnalysis | n
     autoDevCount(st, extra?.whales.length ?? 0, extra?.news.length ?? 0, extra?.conds)
       ? `${autoDevCount(st, extra?.whales.length ?? 0, extra?.news.length ?? 0, extra?.conds)} اقتراح تطوير في دورة العرض — الأحدث: ${latestDev(st, extra)}`
       : 'لا اقتراحات تطوير مفتوحة — النظام مستقر',
-    // مديرة الأخبار
+    // مديرة الأخبار — تنظيم ذاتي
     (() => {
-      const next = (extra?.news ?? []).filter((e) => e.time > now).sort((x, y) => x.time - y.time)[0];
-      if (!next) return 'لا أخبار مجدولة — أضف أخبارك من لوحة الأخبار للحصول على توقع وتنبيه';
+      const all = extra?.news ?? [];
+      const next = all.filter((e) => e.time > now).sort((x, y) => x.time - y.time)[0];
+      if (!next) return `نظّمت ${all.length} خبراً هذا الأسبوع تلقائياً — لا أخبار قادمة الآن`;
       const mins = Math.round((next.time - now) / 60);
-      return `${mins > 0 ? `الخبر القادم بعد ${mins} دقيقة` : 'خبر الآن'}: «${next.title}» — ${newsImpactNote(next).move}`;
+      return `أدير ${all.length} خبراً هذا الأسبوع — القادم ${mins > 0 ? `بعد ${mins} دقيقة` : 'الآن'}: «${next.title}» — توقعي جاهز مع سيناريوهاته`;
     })(),
     // خبير الحيتان
     (() => {

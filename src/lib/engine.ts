@@ -928,3 +928,104 @@ export function analyzeConditions(candles: Candle[], lookback = 480): ConditionS
     stats('كسر قاع 8 شمعات (زخم)', (i) => candles[i].close < Math.min(...candles.slice(i - 8, i).map((c) => c.low))),
   ].filter((c) => c.hits >= 3).sort((x, y) => y.winRate - x.winRate);
 }
+
+// ---------- توقعات لينا حداد: نتيجة الخبر وتأثيره من حالة السوق ----------
+
+export interface NewsCtx {
+  bias: 'bullish' | 'bearish' | 'neutral';
+  h1Bias: 'bullish' | 'bearish' | 'neutral';
+  lastPrice: number;
+  open: number;          // افتتاح اليوم
+  lastWhaleSide?: string; // آخر بصمة حوت من الرصد المحلي
+  nearLiquidity?: string; // أقرب سيولة غير ممسوحة
+}
+
+export interface NewsForecast {
+  lean: string;              // الأرجح
+  leanSide: 'up' | 'down' | 'two-way';
+  scenarios: { cond: string; move: string; prob: number }[];
+  marketNote: string;        // لماذا: بناءً على حالة السوق
+  advice: string;            // خطة التنفيذ
+}
+
+export function forecastNews(ev: NewsEvent, ctx: NewsCtx | null): NewsForecast {
+  const t = ev.title;
+  const state: string[] = [];
+  if (ctx) {
+    state.push(ctx.lastPrice > ctx.open ? `الذهب فوق افتتاح اليوم (${fmt2(ctx.open)})` : `الذهب أسفل افتتاح اليوم (${fmt2(ctx.open)})`);
+    state.push(ctx.h1Bias === 'bullish' ? 'زخم H1 صاعد' : ctx.h1Bias === 'bearish' ? 'زخم H1 هابط' : 'H1 بدون اتجاه');
+    if (ctx.lastWhaleSide) state.push(`آخر بصمة رصدها جيك: ${ctx.lastWhaleSide}`);
+    if (ctx.nearLiquidity) state.push(`السعر قريب من سيولة: ${ctx.nearLiquidity}`);
+  }
+  const marketNote = state.length ? 'حالة السوق الآن: ' + state.join(' — ') : 'بانتظار بيانات السوق المباشرة للدمج في التوقع.';
+
+  const isUsdHigh = ev.currency === 'USD' && ev.impact === 'high' && /NFP|توظيف|CPI|فائدة|FOMC|باول/.test(t);
+  const isFomc = /FOMC|فائدة/.test(t);
+  const isGeo = /جيوسياسية|حرب|توترات|عقوبات|أزمة/.test(t);
+
+  // ميل السوق الداخلي: هل الذهب في زخم صاعد قوي داخل الخبر؟
+  const strongUp = ctx ? ctx.bias === 'bullish' && ctx.h1Bias === 'bullish' && ctx.lastPrice > ctx.open : false;
+  const strongDown = ctx ? ctx.bias === 'bearish' && ctx.h1Bias === 'bearish' && ctx.lastPrice < ctx.open : false;
+
+  if (isFomc) {
+    return {
+      lean: strongUp ? 'الأرجح: رد فعل هابط أولي مهما كانت النبرة، ثم امتصاص وعودة للاتجاه الصاعد' : strongDown ? 'الأرجح: ارتداد صاعد سريع يُباع — الاتجاه الهابط أقوى' : 'الأرجح: تذبذب عرضي حاد في أول 30 دقيقة ثم كسر واضح',
+      leanSide: strongUp ? 'up' : strongDown ? 'down' : 'two-way',
+      scenarios: [
+        { cond: 'تصريحات متشددة + رفع/تمسك بالفائدة', move: 'هبوط 15–30$ خلال 15 دقيقة', prob: 35 },
+        { cond: 'تصريحات متحفظة/مائلة للتيسير', move: 'صعود 15–30$ وقد يتجاوز قمة اليوم', prob: 35 },
+        { cond: 'نبرة محايدة', move: 'تذبذب 10$ عرضياً ثم استكمال الاتجاه السائد', prob: 30 },
+      ],
+      marketNote,
+      advice: 'لا دخول قبل مؤتمر باول. انتظر أول شمعة 15 دقيقة بعد التصريحات ثم تداول كسرها بوقف 15$. اللوت المقترح أدناه.',
+    };
+  }
+  if (isUsdHigh) {
+    const buyDip = strongUp ? 60 : strongDown ? 30 : 45;
+    const sellTop = strongDown ? 60 : strongUp ? 30 : 45;
+    return {
+      lean: strongUp
+        ? 'الأرجح: هبوط خاطف أولاً إن جاءت الأرقام قوية للدولار، يُشترى عند امتصاصه — الزخم الصاعد أقوى من الخبر'
+        : strongDown
+          ? 'الأرجح: ارتداد صاعد أولي يُباع عند السيولة العلوية — الاتجاه الهابط مسيطر'
+          : 'الأرجح: حركة ثنائية الاتجاه (فتيلان طويلان) — السوق بلا مرجحية واضحة',
+      leanSide: strongUp ? 'up' : strongDown ? 'down' : 'two-way',
+      scenarios: [
+        { cond: 'الخبر أقوى من التوقع (للدولار)', move: `هبوط 12–25$${strongUp ? ' ثم ارتداد شرائي محتمل' : ''}`, prob: Math.round(buyDip) },
+        { cond: 'الخبر أضعف من التوقع', move: `صعود 12–25$${strongDown ? ' ثم ارتداد بيعي محتمل' : ''}`, prob: Math.round(sellTop) },
+      ],
+      marketNote,
+      advice: 'القاعدة: أول 5 دقائق خداع سيولة. ادخل مع إغلاق شمعة 15 دقيقة كاملة بعد الخبر في اتجاه الحركة المؤكدة، وقف 15$، واللوت المقترح أدناه.',
+    };
+  }
+  if (isGeo) {
+    return {
+      lean: strongDown
+        ? 'الأرجح: صعود سريع مع التصعيد لكن بجلسة واحدة فقط — الترند الهابط سيبتلغه'
+        : 'الأرجح: صعود الذهب كملاذ آمن مع أي تصعيد، وقد يتجاوز قمة الأسبوع',
+      leanSide: 'up',
+      scenarios: [
+        { cond: 'تصعيد جديد (ضربات/عقوبات/تهديدات)', move: 'صعود 10–25$ قد يمتد لجلسات', prob: 45 },
+        { cond: 'تهدئة أو مفاوضات', move: 'تراجع 8–15$ لامتصاص المكاسب', prob: 30 },
+        { cond: 'كلام بلا فعل', move: 'لا تغيير يُذكر — السعر يعود لمنطق الجلسات', prob: 25 },
+      ],
+      marketNote,
+      advice: 'الأخبار الجيوسياسية تُداول بالمتابعة لا بالتخمين: لا دخول إلا بعد تأكيد الخبر من مصدرين رسميين، والهدف أول سيولة أمامية.',
+    };
+  }
+  return {
+    lean: 'أثر محدود متوقع — الخبر ثانوي',
+    leanSide: 'two-way',
+    scenarios: [
+      { cond: 'نتيجة أعلى من التوقع', move: 'تحرك 5–10$ يتلاشى سريعاً', prob: 40 },
+      { cond: 'نتيجة أقل من التوقع', move: 'تحرك عكسي 5–10$', prob: 40 },
+      { cond: 'مطابق للتوقع', move: 'لا حركة تُذكر', prob: 20 },
+    ],
+    marketNote,
+    advice: 'لا تخصص رأس مال لهذا الخبر وحده — استغله فقط إن صادف سيولة واضحة عند صدوره.',
+  };
+}
+
+function fmt2(n: number): string {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}

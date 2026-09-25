@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  NEWS_PRESETS, newsImpactNote, newsLotSuggestion,
-  type BacktestFull, type NewsEvent, type WhalePrint, type ConditionStat,
+  NEWS_PRESETS, newsImpactNote, newsLotSuggestion, forecastNews,
+  type BacktestFull, type NewsEvent, type WhalePrint, type ConditionStat, type NewsCtx,
 } from '../lib/engine';
+import { fetchWeekCalendar } from '../lib/newsfeed';
 import { loadDbKey, saveDbKey, checkDbKey, fetchGcTrades, analyzeWhales, type DbWhaleStats } from '../lib/databento';
 
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -108,16 +109,50 @@ function saveNews(list: NewsEvent[]) {
   try { localStorage.setItem(LS_NEWS, JSON.stringify(list)); } catch { /* تجاهل */ }
 }
 
-export function NewsPanel({ balance, riskPct, onAlert, onChange }: { balance: number; riskPct: number; onAlert: (msg: string) => void; onChange?: (list: NewsEvent[]) => void }) {
+export function NewsPanel({ balance, riskPct, onAlert, onChange, ctx }: {
+  balance: number; riskPct: number; onAlert: (msg: string) => void;
+  onChange?: (list: NewsEvent[]) => void; ctx?: NewsCtx | null;
+}) {
   const [list, setList] = useState<NewsEvent[]>(loadNews);
   const [open, setOpen] = useState(true);
+  const [manual, setManual] = useState(false);
   const [form, setForm] = useState({ title: '', date: '', time: '12:30', currency: 'USD', impact: 'high' as NewsEvent['impact'], forecast: '', previous: '' });
+  const [autoMsg, setAutoMsg] = useState('');
+  const [autoOk, setAutoOk] = useState<boolean | null>(null);
   const alerted = useRef(new Set<string>());
+  const booted = useRef(false);
 
   useEffect(() => { saveNews(list); onChange?.(list); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // لينا تجلب جدول الأسبوع تلقائياً وتدمجه مع المخزّن
+  const autoLoad = async () => {
+    setAutoOk(null);
+    setAutoMsg('لينا تجلب جدول أخبار الأسبوع تلقائياً…');
+    try {
+      const fresh = await fetchWeekCalendar();
+      setList((prev) => {
+        const ids = new Set(prev.map((e) => e.id));
+        const merged = [...prev, ...fresh.filter((e) => !ids.has(e.id))].sort((a, b) => a.time - b.time).slice(0, 60);
+        return merged;
+      });
+      setAutoOk(true);
+      setAutoMsg(`لينا نظّمت ${fresh.length} خبراً هذا الأسبوع — التوقعات والتنبيهات جاهزة`);
+    } catch {
+      setAutoOk(false);
+      setAutoMsg('تعذر الجلب التلقائي (شبكة/مصدر) — الجدول المخزّن والإضافة اليدوية متاحان، وسأعيد المحاولة تلقائياً كل ساعة');
+    }
+  };
+
+  useEffect(() => {
+    if (!booted.current) { booted.current = true; autoLoad(); }
+    const id = setInterval(() => { if (document.visibilityState === 'visible') autoLoad(); }, 3600_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const now = Date.now() / 1000;
 
-  // تنبيهات تلقائية قبل الخبر وبعده
+  // تنبيهات تلقائية قبل الخبر وبعده (بصوت لينا)
   useEffect(() => {
     const id = setInterval(() => {
       const t = Date.now() / 1000;
@@ -125,107 +160,125 @@ export function NewsPanel({ balance, riskPct, onAlert, onChange }: { balance: nu
         const d = ev.time - t;
         if (d > 0 && d <= 600 && !alerted.current.has(ev.id + '-10')) {
           alerted.current.add(ev.id + '-10');
-          onAlert(`🔔 لينا حداد (مديرة الأخبار): خبر «${ev.title}» بعد ${Math.round(d / 60)} دقيقة — توقع: ${newsImpactNote(ev).move} — لا دخول جديد الآن`);
+          const f = forecastNews(ev, ctx ?? null);
+          onAlert(`🔔 لينا حداد (مديرة الأخبار): «${ev.title}» بعد ${Math.round(d / 60)} دقيقة — توقعي: ${f.lean}`);
         }
         if (d <= 0 && d > -120 && !alerted.current.has(ev.id + '-0')) {
           alerted.current.add(ev.id + '-0');
-          onAlert(`⚡ لينا حداد: صدر خبر «${ev.title}» الآن — انتظر شمعة إغلاق 15 دقيقة ثم اتبع الاتجاه المؤكد`);
+          onAlert(`⚡ لينا: صدر «${ev.title}» الآن — ${newsImpactNote(ev).move} — انتظري شمعة 15 دقيقة كاملة قبل أي دخول`);
         }
       }
     }, 15000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list]);
+  }, [list, ctx]);
 
   const addEvent = (preset?: (typeof NEWS_PRESETS)[number]) => {
     const base = preset ?? { title: form.title, currency: form.currency, impact: form.impact, forecast: form.forecast, previous: form.previous };
     if (!base.title || !form.date) return;
     const time = Math.floor(new Date(`${form.date}T${form.time}:00Z`).getTime() / 1000);
     if (!Number.isFinite(time)) return;
-    setList((l) => [...l, { ...base, id: Math.random().toString(36).slice(2), time }].sort((x, y) => x.time - y.time));
+    setList((l) => [...l, { ...base, id: 'man-' + Math.random().toString(36).slice(2), time }].sort((x, y) => x.time - y.time));
   };
 
-  const upcoming = list.filter((e) => e.time + 3600 > now).slice(0, 5);
+  const upcoming = list.filter((e) => e.time + 7200 > now).slice(0, 6);
   const sug = newsLotSuggestion(balance || 1000, riskPct || 1, 15);
 
   return (
     <div className="rounded-sm border border-red-400/25 bg-[#0c1220] p-2">
       <button onClick={() => setOpen((v) => !v)} className="mb-1.5 flex w-full items-center gap-1.5 text-right">
         <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-300">مديرة الأخبار — اقتصادية وجيوسياسية</h3>
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-300">مديرة الأخبار — تنظيم ذاتي وتوقعات</h3>
         <div className="h-px flex-1 bg-[#1a2540]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض'}</span>
       </button>
       {open && (
         <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full ${autoOk === true ? 'bg-emerald-400' : autoOk === false ? 'bg-amber-400' : 'animate-pulse bg-red-400'}`} />
+            <p className={`flex-1 text-[9px] leading-relaxed ${autoOk === true ? 'text-emerald-400/90' : 'text-slate-400'}`}>{autoMsg || 'جارٍ التهيئة…'}</p>
+            <button onClick={autoLoad} className="shrink-0 rounded-sm border border-[#2a3a5f] px-1.5 py-0.5 text-[8.5px] text-slate-400 transition hover:border-red-400/40 hover:text-red-300">تحديث الجدول</button>
+          </div>
+
           {upcoming.map((ev) => {
-            const note = newsImpactNote(ev);
+            const f = forecastNews(ev, ctx ?? null);
             const mins = Math.round((ev.time - now) / 60);
+            const sideColor = f.leanSide === 'up' ? 'text-emerald-300' : f.leanSide === 'down' ? 'text-red-300' : 'text-amber-300';
             return (
               <div key={ev.id} className="rounded-sm border border-[#1a2540] bg-[#080c16] p-2">
                 <div className="flex items-center gap-1.5">
-                  <span className={`rounded-sm px-1.5 py-0.5 text-[8.5px] font-black ${ev.impact === 'high' ? 'bg-red-400/15 text-red-300' : ev.impact === 'medium' ? 'bg-amber-400/15 text-amber-300' : 'bg-slate-400/15 text-slate-400'}`}>
-                    {ev.impact === 'high' ? 'عالي التأثير' : ev.impact === 'medium' ? 'متوسط' : 'منخفض'}
+                  <span className={`rounded-sm px-1.5 py-0.5 text-[8.5px] font-black ${ev.impact === 'high' ? 'bg-red-400/15 text-red-300' : 'bg-amber-400/15 text-amber-300'}`}>
+                    {ev.impact === 'high' ? 'عالي' : 'متوسط'}
                   </span>
                   <span className="flex-1 text-[10.5px] font-bold text-white">{ev.title}</span>
-                  <span dir="ltr" className="font-mono text-[9.5px] text-slate-500">
+                  <span dir="ltr" className="font-mono text-[9px] text-slate-500">
                     {new Date(ev.time * 1000).toISOString().slice(5, 16).replace('T', ' ')} UTC
                   </span>
                   <button onClick={() => setList((l) => l.filter((x) => x.id !== ev.id))} className="text-[9px] text-slate-600 hover:text-red-400">✕</button>
                 </div>
-                <div className="mt-1 text-[9.5px] leading-relaxed text-slate-400">
-                  <span className="text-slate-300">⏱ {mins > 0 ? `بعد ${mins} دقيقة` : 'صدر'}</span>
-                  {ev.forecast && <span className="mr-2">توقعات: {ev.forecast}</span>}
+                <div className="mt-0.5 text-[9px] text-slate-500">
+                  <span className="text-slate-400">{mins > 0 ? `⏱ بعد ${mins} دقيقة` : '⏱ صدر'}</span>
+                  {ev.forecast && <span className="mr-2">توقعات السوق: {ev.forecast}</span>}
                   {ev.previous && <span className="mr-2">سابق: {ev.previous}</span>}
                 </div>
-                <div className="mt-1 rounded-sm bg-[#0c1220] p-1.5 text-[9.5px] leading-relaxed">
-                  <p className="text-amber-300/90">📊 {note.move} — {note.dir}</p>
-                  <p className="text-slate-400">{note.note}</p>
+                <div className="mt-1 rounded-sm bg-[#0c1220] p-1.5">
+                  <p className={`text-[9.5px] font-bold leading-relaxed ${sideColor}`}>🔮 توقع لينا: {f.lean}</p>
+                  <div className="mt-1 space-y-0.5">
+                    {f.scenarios.map((s, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-[9px] text-slate-400">
+                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#1a2540]">
+                          <div className="h-full bg-red-400/70" style={{ width: `${s.prob}%` }} />
+                        </div>
+                        <span dir="ltr" className="w-7 shrink-0 text-center font-mono text-slate-500">{s.prob}%</span>
+                        <span className="flex-[2]"><b className="text-slate-300">{s.cond}:</b> {s.move}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[8.5px] leading-relaxed text-slate-500">{f.marketNote}</p>
+                  <p className="mt-0.5 text-[8.5px] leading-relaxed text-cyan-300/80">🧭 {f.advice}</p>
                 </div>
                 <p className="mt-1 text-[9.5px] font-bold text-emerald-300">
-                  💰 توصية اللوت: {sug.lot.toFixed(2)} لوت بوقف {fmt(15)}$ — خطر {fmt(sug.riskUsd)}$ — هدف {fmt(sug.target10)}$ حركة = 10$ ربح على {sug.lot.toFixed(2)}
+                  💰 دخول الخبر: {sug.lot.toFixed(2)} لوت — وقف {fmt(15)}$ — هدف {fmt(sug.target10)}$ حركة = 10$ على {sug.lot.toFixed(2)}
                 </p>
               </div>
             );
           })}
-          {upcoming.length === 0 && <p className="text-[10px] text-slate-500">لا أخبار مجدولة — أضف خبراً أو استخدم قالباً جاهزاً.</p>}
+          {upcoming.length === 0 && <p className="text-[10px] text-slate-500">لا أخبار قادمة في الجدول — اضغط «تحديث الجدول» أو أضف خبراً يدوياً.</p>}
 
-          <div className="rounded-sm border border-dashed border-[#2a3a5f] p-2">
-            <div className="mb-1 text-[9px] font-bold text-slate-400">جدولة خبر جديد</div>
-            <input
-              placeholder="عنوان الخبر…"
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              className="mb-1 w-full rounded-sm border border-[#1a2540] bg-[#0c1220] px-2 py-1 text-[10px] text-white outline-none focus:border-red-400/50"
-            />
-            <div className="mb-1 flex gap-1">
-              <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="w-1/2 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 font-mono text-[9.5px] text-white outline-none" dir="ltr" />
-              <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className="w-1/2 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 font-mono text-[9.5px] text-white outline-none" dir="ltr" />
+          <button onClick={() => setManual((v) => !v)} className="w-full rounded-sm border border-dashed border-[#2a3a5f] py-1 text-[9px] text-slate-500 transition hover:text-slate-300">
+            {manual ? '▲ إخفاء الإضافة اليدوية (احتياط)' : '▼ إضافة خبر يدوي (احتياط)'}
+          </button>
+          {manual && (
+            <div className="rounded-sm border border-dashed border-[#2a3a5f] p-2">
+              <input
+                placeholder="عنوان الخبر…"
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                className="mb-1 w-full rounded-sm border border-[#1a2540] bg-[#0c1220] px-2 py-1 text-[10px] text-white outline-none focus:border-red-400/50"
+              />
+              <div className="mb-1 flex gap-1">
+                <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="w-1/2 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 font-mono text-[9.5px] text-white outline-none" dir="ltr" />
+                <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className="w-1/2 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 font-mono text-[9.5px] text-white outline-none" dir="ltr" />
+              </div>
+              <div className="mb-1 flex gap-1">
+                <select value={form.impact} onChange={(e) => setForm((f) => ({ ...f, impact: e.target.value as NewsEvent['impact'] }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none">
+                  <option value="high">عالي التأثير</option>
+                  <option value="medium">متوسط</option>
+                  <option value="low">منخفض</option>
+                </select>
+                <input placeholder="توقعات" value={form.forecast} onChange={(e) => setForm((f) => ({ ...f, forecast: e.target.value }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none" />
+                <input placeholder="سابق" value={form.previous} onChange={(e) => setForm((f) => ({ ...f, previous: e.target.value }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none" />
+              </div>
+              <button onClick={() => addEvent()} className="w-full rounded-sm bg-red-400/15 py-1 text-[10px] font-bold text-red-300 transition hover:bg-red-400/25">+ إضافة</button>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {NEWS_PRESETS.map((p, i) => (
+                  <button key={i} title={`أضف «${p.title}» في التاريخ المختار أعلاه`} onClick={() => addEvent(p)} className="rounded-sm border border-[#2a3a5f] px-1.5 py-0.5 text-[8.5px] text-slate-400 transition hover:border-red-400/40 hover:text-red-300">
+                    {p.title}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="mb-1 flex gap-1">
-              <select value={form.impact} onChange={(e) => setForm((f) => ({ ...f, impact: e.target.value as NewsEvent['impact'] }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none">
-                <option value="high">عالي التأثير</option>
-                <option value="medium">متوسط</option>
-                <option value="low">منخفض</option>
-              </select>
-              <input placeholder="توقعات" value={form.forecast} onChange={(e) => setForm((f) => ({ ...f, forecast: e.target.value }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none" />
-              <input placeholder="سابق" value={form.previous} onChange={(e) => setForm((f) => ({ ...f, previous: e.target.value }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none" />
-            </div>
-            <button onClick={() => addEvent()} className="w-full rounded-sm bg-red-400/15 py-1 text-[10px] font-bold text-red-300 transition hover:bg-red-400/25">+ إضافة الخبر</button>
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {NEWS_PRESETS.map((p, i) => (
-                <button
-                  key={i}
-                  title={`أضف «${p.title}» في التاريخ المختار أعلاه`}
-                  onClick={() => addEvent(p)}
-                  className="rounded-sm border border-[#2a3a5f] px-1.5 py-0.5 text-[8.5px] text-slate-400 transition hover:border-red-400/40 hover:text-red-300"
-                >
-                  {p.title}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="text-[8.5px] leading-relaxed text-slate-600">التنبيه التلقائي يعمل قبل الخبر بـ 10 دقائق وعند صدوره. التوصية: وقف 15$ مع هدف 10$ ربح على اللوت المقترح حسب قاعدة مخاطرتك.</p>
+          )}
         </div>
       )}
     </div>

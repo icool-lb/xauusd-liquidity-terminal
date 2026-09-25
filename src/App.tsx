@@ -202,7 +202,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V16</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V17</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -465,7 +465,26 @@ export default function App() {
             extra={{ news: newsList, whales, conds, dbOk }}
           />
           <DevPanel st={stats} whales={whales} newsCount={newsList.filter((e) => e.time + 3600 > Date.now() / 1000).length} conds={conds} />
-          <NewsPanel balance={account} riskPct={riskPct} onAlert={showToast} onChange={setNewsList} />
+          <NewsPanel
+            balance={account}
+            riskPct={riskPct}
+            onAlert={showToast}
+            onChange={setNewsList}
+            ctx={analysis ? {
+              bias: analysis.bias,
+              h1Bias,
+              lastPrice: analysis.lastPrice,
+              open: analysis.open,
+              lastWhaleSide: whales.length ? whales[whales.length - 1].side : undefined,
+              nearLiquidity: (() => {
+                const un = analysis.levels.filter((l) => !l.swept && l.kind !== 'OPEN' && Number.isFinite(l.price));
+                const ab = un.filter((l) => l.price > analysis.lastPrice).sort((x, y) => x.price - y.price)[0];
+                const be = un.filter((l) => l.price < analysis.lastPrice).sort((x, y) => y.price - x.price)[0];
+                if (ab && be) return Math.abs(ab.price - analysis.lastPrice) < Math.abs(analysis.lastPrice - be.price) ? `${ab.label} أعلى` : `${be.label} أسفل`;
+                return ab ? `${ab.label} أعلى` : be ? `${be.label} أسفل` : undefined;
+              })(),
+            } : null}
+          />
           <WhalePanel whales={whales} onAlert={showToast} onStatus={setDbOk} />
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">

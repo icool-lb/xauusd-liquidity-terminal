@@ -81,7 +81,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creds]);
 
-  // تحديث الشمعة الحالية كل 15 ثانية
+  // تحديث الشمعة الحالية والسعر كل 5 ثوانٍ
   useEffect(() => {
     if (liveStatus !== 'ok' || !creds) return;
     const id = setInterval(async () => {
@@ -95,7 +95,7 @@ export default function App() {
           return prev;
         });
       } catch { /* تجاهل أخطاء النبضة الواحدة */ }
-    }, 15000);
+    }, 5000);
     return () => clearInterval(id);
   }, [liveStatus, creds]);
 
@@ -174,7 +174,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V13</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V14</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -433,7 +433,7 @@ export default function App() {
           <CrewPanel />
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
-            بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، وتُحدَّث الشمعة الحالية كل 15 ثانية. هذا ليس نصيحة استثمارية.
+            بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.
           </p>
         </aside>
       </div>

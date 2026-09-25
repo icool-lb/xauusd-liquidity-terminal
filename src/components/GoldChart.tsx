@@ -8,6 +8,7 @@ import {
   type UTCTimestamp,
   ColorType,
 } from 'lightweight-charts';
+import { jsPDF } from 'jspdf';
 import {
   KILL_ZONES, detectFVGs, computeOTE, detectStructure, autoLiquidityZones, detectOrderBlocks,
   type DayAnalysis, type Candle,
@@ -390,6 +391,68 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
     ts.setVisibleLogicalRange({ from: center - half, to: center + half });
   };
 
+  // تصدير PDF عالي الدقة: تكبير مؤقت للشارت + دمج طبقة الشارت مع طبقة الرسم
+  const [exporting, setExporting] = useState(false);
+  const exportPdf = async () => {
+    const chart = chartRef.current, host = ref.current, ov = canvasRef.current;
+    if (!chart || !host || !ov || exporting) return;
+    const lib = host.querySelector('canvas:not([data-overlay])') as HTMLCanvasElement | null;
+    if (!lib) return;
+    setExporting(true);
+    const ow = host.clientWidth, oh = host.clientHeight; // الأبعاد الأصلية للاستعادة
+    try {
+      const scale = 2.5; // دقة التصدير
+      const w0 = ow, h0 = oh;
+      host.style.width = w0 * scale + 'px';
+      host.style.height = h0 * scale + 'px';
+      chart.applyOptions({ width: w0 * scale, height: h0 * scale });
+      syncCanvas();
+      drawRef.current();
+      await new Promise((r) => setTimeout(r, 400)); // انتظر إعادة رسم المكتبة
+      requestAnimationFrame(() => drawRef.current());
+
+      const W = lib.width, H = lib.height;
+      const out = document.createElement('canvas');
+      out.width = W; out.height = H + Math.round(H * 0.07);
+      const octx = out.getContext('2d');
+      if (!octx) throw new Error('canvas');
+      octx.fillStyle = '#050810';
+      octx.fillRect(0, 0, out.width, out.height);
+      octx.drawImage(lib, 0, Math.round(H * 0.07));
+      octx.drawImage(ov, 0, Math.round(H * 0.07));
+      // ترويسة التقرير
+      const pad = Math.round(H * 0.02), th = Math.round(H * 0.07);
+      octx.fillStyle = '#fbbf24';
+      octx.font = `bold ${Math.round(th * 0.42)}px "JetBrains Mono", monospace`;
+      octx.textBaseline = 'middle';
+      octx.fillText('XAUUSD — LIQUIDITY TERMINAL', pad, th / 2);
+      octx.fillStyle = '#8b98b8';
+      octx.font = `${Math.round(th * 0.3)}px "JetBrains Mono", monospace`;
+      const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+      octx.fillText(stamp, pad, th / 2 + th * 0.3);
+      octx.textAlign = 'right';
+      octx.fillText(`RES ${scale}x`, W - pad, th / 2);
+      octx.textAlign = 'left';
+
+      const img = out.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+      const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      const m = 18;
+      const iw = pw - m * 2, ih = (out.height / out.width) * iw;
+      const fh = ih > ph - m * 2 ? (ph - m * 2) : ih;
+      const fw = (out.width / out.height) * fh;
+      pdf.addImage(img, 'PNG', m + (iw - fw) / 2, m + ((ph - m * 2) - fh) / 2, fw, fh);
+      pdf.save(`XAUUSD-analysis-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch { /* تجاهل */ } finally {
+      host.style.width = '';
+      host.style.height = '';
+      chart.applyOptions({ width: ow, height: oh });
+      syncCanvas();
+      drawRef.current();
+      setExporting(false);
+    }
+  };
+
   const ctrlBtn =
     'flex h-7 w-7 items-center justify-center rounded-sm border border-[#2a3a5f] bg-[#0c1220e6] text-[13px] font-bold text-slate-300 transition hover:border-amber-400/60 hover:text-amber-300 active:scale-90';
 
@@ -399,9 +462,14 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
       className={full ? 'fixed inset-0 z-[100] bg-[#050810]' : 'relative h-full w-full'}
       dir="ltr"
     >
-      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 z-10" />
+      <canvas ref={canvasRef} data-overlay className="pointer-events-none absolute inset-0 z-10" />
       {/* أدوات الزوم وملء الشاشة */}
       <div className="absolute left-2 top-2 z-20 flex flex-col gap-1">
+        <button
+          className={`${ctrlBtn} ${exporting ? 'border-amber-400 text-amber-300' : ''}`}
+          title="تصدير PDF عالي الدقة"
+          onClick={exportPdf}
+        >{exporting ? '…' : '⤓'}</button>
         <button className={ctrlBtn} title="تقريب" onClick={() => zoom(1)}>＋</button>
         <button className={ctrlBtn} title="إبعاد" onClick={() => zoom(-1)}>－</button>
         <button className={ctrlBtn} title="ملاءمة يوم التحليل" onClick={fitDay}>⤢</button>

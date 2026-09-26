@@ -443,6 +443,7 @@ export interface CrewExtra {
   dbOk: boolean | null;
   stratBest?: { name: string; winRate: number; trades: number; netPnl: number } | null;
   stratLive?: string;
+  btToday?: { baselineExp: number; topLabel: string; topExp: number } | null;
 }
 
 export interface CrewWave { dir: 'up' | 'down' | 'flat'; strength: number; summary: string; path: { price: number; label: string }[]; }
@@ -469,7 +470,9 @@ export function CrewPanel({ a, st, lastCandleTime, extra, wave }: { a: DayAnalys
       : asiaW < 8 ? `نطاق آسيا ضيق (${asiaW.toFixed(1)}$) — توقّع اختراق حاد مع لندن`
       : asiaW > 16 ? `نطاق آسيا واسع (${asiaW.toFixed(1)}$) — السيولة بعيدة، انتظر السحب أولاً`
       : `نطاق آسيا طبيعي (${asiaW.toFixed(1)}$)`,
-    st ? `الباك-تيست: ${st.winRate}% نجاح على ${st.total} إشارة — التوقع ${st.expectancyR >= 0 ? '+' : ''}${st.expectancyR}R ${st.expectancyR > 0 ? '— الاستراتيجية جاهزة' : '— حذر'}` : 'لا نتائج باك-تيست كافية بعد',
+    extra?.btToday
+      ? `فحص اليوم تم ✓ — أساس ${extra.btToday.baselineExp}R — الأفضل «${extra.btToday.topLabel}» (${extra.btToday.topExp}R)${st ? ` — مرجع 25ي: ${st.winRate}%` : ''}`
+      : st ? `مرجع سريع: ${st.winRate}% نجاح على ${st.total} إشارة — ${st.expectancyR > 0 ? 'الاستراتيجية موجبة التوقع' : 'حذر: التوقع سالب'} — والفحص اليومي لم يبدأ بعد` : 'لا نتائج باك-تيست كافية بعد — الفحص اليومي يبدأ تلقائياً مع أول اتصال',
     a ? `${a.sweeps.length} سحب سيولة اليوم — ${unswept.length} مستويات لم تُسحب بعد` : 'لا تحليل بعد',
     minsAgo === null ? 'غير متصل بمصدر البيانات'
       : minsAgo <= 1 ? `البيانات حية — آخر شمعة قبل ${minsAgo} دقيقة`

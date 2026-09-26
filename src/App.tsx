@@ -4,6 +4,8 @@ import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, 
 import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
 import { DnaPanel } from './components/DnaPanel';
 import { StratPanel } from './components/StratPanel';
+import { BtExpertPanel } from './components/BtExpertPanel';
+import { loadBtJournal } from './lib/btsuite';
 import { runStrategyLab, mergedPlan } from './lib/strategies';
 import { buildTfLadder, buildWave, waveSpeech } from './lib/dna';
 import { unlockAudio, setVoice, beep as beepLib, speak, signalChime } from './lib/audio';
@@ -250,7 +252,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V19</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V20</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -526,6 +528,7 @@ export default function App() {
             lastCandleTime={all.length ? all[all.length - 1].time : 0}
             extra={{
               news: newsList, whales, conds, dbOk,
+              btToday: (() => { const j = loadBtJournal(); const t = j[0]; return t && t.date === new Date().toISOString().slice(0, 10) ? { baselineExp: t.baselineExp, topLabel: t.topLabel, topExp: t.topExp } : null; })(),
               stratBest: stratResults[0] ?? null,
               stratLive: stratPlan && stratPlan.side !== 'flat' ? `${stratPlan.side === 'long' ? 'شراء' : 'بيع'} بثقة ${stratPlan.confidence}%` : undefined,
             }}
@@ -554,6 +557,7 @@ export default function App() {
           />
           <WhalePanel whales={whales} onAlert={crewAlert} onStatus={setDbOk} />
           <DnaPanel tfs={tfLadder} wave={wave} />
+          {liveStatus === 'ok' && <BtExpertPanel candles={all} />}
           {liveStatus === 'ok' && <StratPanel candles={all} price={lastPrice} />}
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">

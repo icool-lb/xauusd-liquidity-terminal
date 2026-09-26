@@ -13,9 +13,21 @@ export function saveDbKey(k: string) {
   try { localStorage.setItem(KEY_LS, k); } catch { /* تجاهل */ }
 }
 
+function isLocalDev(): boolean {
+  try { return ['localhost', '127.0.0.1'].includes(location.hostname); } catch { return true; }
+}
+
 async function dbFetch(path: string, key: string): Promise<Response> {
   // Databento يستخدم HTTP Basic: api_key كاسم مستخدم وكلمة مرور فارغة
   const auth = 'Basic ' + btoa(key + ':');
+  if (!isLocalDev()) {
+    // عبر وسيط المنصة الخادمي (يتجنب حظر CORS من المتصفح) — المفتاح في الترويسة فقط
+    const [p, query] = path.split('?');
+    const url = '/api/db-proxy?path=' + encodeURIComponent(p.replace(/^\//, '')) + (query ? '&' + query : '');
+    const r = await fetch(url, { headers: { 'x-db-key': key } });
+    if (r.ok) return r;
+    // إن لم يكن الوسيط متاحاً (بيئة بلا api/) جرّب المباشر كملاذ أخير
+  }
   return fetch(HIST + path, { headers: { Authorization: auth } });
 }
 
@@ -29,7 +41,7 @@ export async function checkDbKey(key: string): Promise<{ ok: boolean; msg: strin
     const hasGlbx = txt.includes('GLBX');
     return { ok: true, msg: hasGlbx ? 'المفتاح يعمل — مجموعة GLBX (CME) متاحة' : 'المفتاح يعمل' };
   } catch (e) {
-    return { ok: false, msg: 'تعذر الوصول لخوادم Databento من المتصفح (شبكة/CORS). جرّب شبكة أخرى أو أخبرنا لنضيف وسيط خادمي.' };
+    return { ok: false, msg: 'تعذر الوصول لخوادم Databento حتى عبر وسيط المنصة — تحقق من الشبكة وأعد المحاولة' };
   }
 }
 

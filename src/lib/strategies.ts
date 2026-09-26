@@ -193,7 +193,11 @@ function stochNow(c: Candle[]): number {
 }
 
 // ---------- محاكاة باك-تيست موحّدة: وقف 15$ / هدف 10$ على 0.01 ----------
-export function runStrategyLab(candles: Candle[], slD = 15, tpD = 10, days = 30): StrategyResult[] {
+export function runStrategyLab(candles: Candle[], slD = 15, tpD = 10, days = 0): StrategyResult[] {
+  if (!days && candles.length > 1) {
+    days = Math.max(30, Math.min(150, Math.floor((candles[candles.length - 1].time - candles[0].time) / 86400) - 1));
+  }
+  days = days || 30;
   if (candles.length < 120) return [];
   const lib = buildLibrary();
   const startIdx = Math.max(30, candles.length - days * 96); // 96 شمعة يومياً (M15)

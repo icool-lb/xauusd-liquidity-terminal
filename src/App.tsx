@@ -37,6 +37,7 @@ export default function App() {
   const [liveData, setLiveData] = useState<Candle[]>([]);
   const [m1Data, setM1Data] = useState<Candle[]>([]);
   const [m5Data, setM5Data] = useState<Candle[]>([]);
+  const [btData, setBtData] = useState<Candle[]>([]); // أرشيف عميق للباك-تيست والمختبرات
   const [dataInfo, setDataInfo] = useState('');
   const [priceWarn, setPriceWarn] = useState('');
   const regionRef = useRef<string>(loadRegion());
@@ -67,6 +68,9 @@ export default function App() {
         fetchHistory(c, region, 1, '1m').then(setM1Data).catch(() => setM1Data([])),
         fetchHistory(c, region, 3, '5m').then(setM5Data).catch(() => setM5Data([])),
       ]);
+      // أرشيف 180 يوماً لخبير الباك-تيست اليومي ومختبر الاستراتيجيات — يعمل حتى في العطلات
+      setBtData([]);
+      void fetchHistory(c, region, 180).then(setBtData).catch(() => setBtData([]));
       if (candles.length) {
         const from = new Date(candles[0].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
         const to = new Date(candles[candles.length - 1].time * 1000).toISOString().slice(5, 16).replace('T', ' ');
@@ -124,6 +128,9 @@ export default function App() {
   }, [liveStatus, creds]);
 
   const all = liveData;
+  // وضع العطلة/الأرشيف: إن توقفت البيانات الحية أكثر من يومين نغذي الخبراء بالأرشيف العميق
+  const archiveMode = all.length > 0 && btData.length > all.length && (Date.now() / 1000 - all[all.length - 1].time) > 2 * 86400;
+  const labData = archiveMode ? btData : (btData.length >= 500 ? btData : all);
 
   // ---- الفريمات والطبقات التلقائية ----
   const [tf, setTf] = useState(900); // بالثواني
@@ -140,9 +147,9 @@ export default function App() {
   );
   const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, BT_DAYS) : null), [all]);
   const whales = useMemo(() => detectWhales(all), [all]);
-  const conds = useMemo(() => analyzeConditions(all), [all]);
+  const conds = useMemo(() => analyzeConditions(labData, archiveMode ? 2000 : 480), [labData, archiveMode]);
   // مختبر الاستراتيجيات (ساندي كوهين)
-  const stratResults = useMemo(() => (all.length >= 300 ? runStrategyLab(all) : []), [all]);
+  const stratResults = useMemo(() => (labData.length >= 300 ? runStrategyLab(labData) : []), [labData]);
   const stratPlan = useMemo(() => mergedPlan(stratResults, analysis?.lastPrice ?? 0), [stratResults, analysis]);
   // خبير DNA: سلم الأطر الثمانية + موجة التداول
   const tfLadder = useMemo(() => buildTfLadder(m1Data, m5Data, all), [m1Data, m5Data, all]);
@@ -252,7 +259,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V20</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V21</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -473,6 +480,12 @@ export default function App() {
               </div>
             </div>
           )}
+          {/* وضع العطلة: عمل الخبراء على الأرشيف */}
+          {liveStatus === 'ok' && archiveMode && (
+            <div className="mx-3 mt-1.5 shrink-0 rounded-sm border border-cyan-400/40 bg-cyan-400/10 px-2 py-1 text-[10px] leading-relaxed text-cyan-200">
+              🏛️ البورصة مغلقة والبيانات الحية متوقفة — وضع الأرشيف نشط: خبير الباك-تيست ومختبر الاستراتيجيات ومحلل الشروط يعملون على {btData.length.toLocaleString('en-US')} شمعة أرشيفية (~{Math.round(btData.length / 96)} يوماً) لتطوير المنصة حتى أيام العطلة.
+            </div>
+          )}
           {/* تحذير البيانات الراكدة */}
           {liveStatus === 'ok' && dataStale && (
             <div className="mx-3 mt-1.5 shrink-0 rounded-sm border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] leading-relaxed text-amber-300">
@@ -557,8 +570,8 @@ export default function App() {
           />
           <WhalePanel whales={whales} onAlert={crewAlert} onStatus={setDbOk} />
           <DnaPanel tfs={tfLadder} wave={wave} />
-          {liveStatus === 'ok' && <BtExpertPanel candles={all} />}
-          {liveStatus === 'ok' && <StratPanel candles={all} price={lastPrice} />}
+          {liveStatus === 'ok' && <BtExpertPanel candles={labData} />}
+          {liveStatus === 'ok' && <StratPanel candles={labData} price={lastPrice} />}
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
             بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.

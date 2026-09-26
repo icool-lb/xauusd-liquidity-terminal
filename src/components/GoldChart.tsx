@@ -34,6 +34,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const lastFitKey = useRef<string>('');
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const drawRef = useRef<() => void>(() => {});
   const stateRef = useRef({ analysis, layers, tfSeconds });
@@ -287,7 +288,12 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
     if (!chart || !series || !showAll.length) return;
     syncCanvas();
 
+    // حفظ موضع المستخدم (الزوم/التمرير) قبل تحديث البيانات ثم استرجاعه —
+    // وإلا يقفز الشارت لموضعه الافتراضي مع كل نبضة 5 ثوانٍ
+    const ts0 = chart.timeScale();
+    const savedRange = ts0.getVisibleLogicalRange();
     series.setData(showAll.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
+    if (savedRange) ts0.setVisibleLogicalRange(savedRange);
 
     const lines: (ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']> | null)[] = [];
     if (analysis) {
@@ -354,7 +360,12 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
     }
     const pm = createSeriesMarkers(series, markers);
 
-    fitDay();
+    // الملاءمة التلقائية مرة واحدة فقط عند تغيّر يوم التحليل أو الفريم — لا مع كل تحديث بيانات
+    const fitKey = `${analysis?.dayKey ?? ''}-${tfSeconds}`;
+    if (lastFitKey.current !== fitKey) {
+      lastFitKey.current = fitKey;
+      fitDay();
+    }
     requestAnimationFrame(() => drawRef.current());
     setTimeout(() => drawRef.current(), 100);
 

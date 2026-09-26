@@ -124,7 +124,9 @@ function baseCfg(patch: Partial<BtConfig>): BtConfig {
 }
 
 export function runBtSuite(all: Candle[]): BtSuiteResult | null {
-  const raw = collectSignals(all, 30);
+  const spanDays = all.length > 1 ? Math.floor((all[all.length - 1].time - all[0].time) / 86400) : 0;
+  const lookback = Math.min(180, Math.max(30, spanDays));
+  const raw = collectSignals(all, lookback);
   if (raw.length < 15) return null;
 
   // شبكة التركيبات: نختبر أثر كل مقبض بمعزوله ثم نصنّف الكل
@@ -140,6 +142,8 @@ export function runBtSuite(all: Candle[]): BtSuiteResult | null {
   add({ minRR: 2.5 }, 'اشترط R:R ≥ 2.5');
   add({ days: 15 }, 'نافذة 15 يوماً');
   add({ days: 20 }, 'نافذة 20 يوماً');
+  if (lookback >= 60) add({ days: 60 }, 'نافذة 60 يوماً');
+  if (lookback >= 120) add({ days: 120 }, 'نافذة 120 يوماً');
   add({ kzOnly: true, tpMode: 'fixed10' }, 'دمج: كيلزون + هدف 10$');
   add({ kzOnly: true, tpMode: 'fixed10', minRR: 2 }, 'دمج: كيلزون + هدف 10$ + R:R 2');
 
@@ -169,7 +173,7 @@ export function runBtSuite(all: Candle[]): BtSuiteResult | null {
 
   return {
     ranAt: Date.now(),
-    daysTested: 30,
+    daysTested: lookback,
     baseline,
     top: withTrades.slice(0, 4),
     recommendations: recs.slice(0, 5),

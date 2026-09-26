@@ -5,6 +5,8 @@ import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
 import { DnaPanel } from './components/DnaPanel';
 import { StratPanel } from './components/StratPanel';
 import { BtExpertPanel } from './components/BtExpertPanel';
+import { SettingsPage } from './components/SettingsPage';
+import { TimingPanel } from './components/TimingPanel';
 import { RoadmapStrip, type RoadmapInfo, type DbConfirm } from './components/RoadmapStrip';
 import { loadDbKey, fetchGcTrades, analyzeWhales } from './lib/databento';
 import { loadBtJournal } from './lib/btsuite';
@@ -32,7 +34,7 @@ const sessionColor: Record<string, string> = {
 
 export default function App() {
   // ---- بيانات حقيقية فقط (MetaApi) ----
-  const [chartView, setChartView] = useState<'engine' | 'tv'>('engine');
+  const [chartView, setChartView] = useState<'engine' | 'tv' | 'settings'>('engine');
   const [creds, setCreds] = useState<MetaApiCreds | null>(() => loadCreds());
   const [liveStatus, setLiveStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [liveError, setLiveError] = useState('');
@@ -332,7 +334,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V22</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V23</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -518,6 +520,12 @@ export default function App() {
             >
               TradingView مباشر
             </button>
+            <button
+              onClick={() => setChartView('settings')}
+              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'settings' ? 'bg-[#111a2b] text-amber-300' : 'text-slate-500 hover:text-white'}`}
+            >
+              ⚙️ الإعدادات
+            </button>
             {/* مبدّل الفريمات */}
             {chartView === 'engine' && (
               <div dir="ltr" className="flex rounded-sm border border-[#2a3a5f] p-0.5 font-mono text-[9px]">
@@ -578,7 +586,16 @@ export default function App() {
           )}
           <div className="min-h-0 flex-1 p-2">
             <div className="relative h-full overflow-hidden rounded-md border border-[#1a2540] bg-[#050810] p-1">
-              {chartView === 'engine' ? (
+              {chartView === 'settings' ? (
+                <SettingsPage
+                  creds={creds}
+                  status={liveStatus}
+                  error={liveError}
+                  onSave={(c) => { saveCreds(c); setCreds(c); }}
+                  onTest={() => creds && connectLive(creds)}
+                  onDbStatus={setDbOk}
+                />
+              ) : chartView === 'engine' ? (
                 liveStatus !== 'ok' ? (
                   <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
                     {liveStatus === 'loading' && <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />}
@@ -616,6 +633,17 @@ export default function App() {
         <aside className="order-3 w-full shrink-0 space-y-5 border-t border-[#1a2540] bg-[#080c16] p-3 lg:w-72 lg:border-r lg:border-t-0 lg:overflow-y-auto">
           <SignalCard s={dayOffset === 0 ? sig : analysis?.signals[0] ?? null} bias={analysis?.bias ?? 'neutral'} />
           <RiskCalc s={sig} account={account} riskPct={riskPct} />
+          <TimingPanel
+            a={analysis}
+            wave={wave}
+            ladder={tfLadder}
+            dbConfirm={dbConfirm}
+            news={newsList}
+            account={account}
+            riskPct={riskPct}
+            tNow={all.length ? all[all.length - 1].time : Math.floor(Date.now() / 1000)}
+            onAlert={crewAlert}
+          />
           {stats && <StatsPanel st={stats} />}
           {stats && <EquityCurve st={stats} />}
           {stats && <LevelStats st={stats} />}

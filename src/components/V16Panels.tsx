@@ -6,7 +6,7 @@ import {
 import { fetchWeekCalendar } from '../lib/newsfeed';
 import { analyzeNewsCorrelation } from '../lib/newscorr';
 import type { Candle } from '../lib/engine';
-import { loadDbKey, saveDbKey, checkDbKey, fetchGcTrades, analyzeWhales, type DbWhaleStats } from '../lib/databento';
+import { loadDbKey, fetchGcTrades, analyzeWhales, type DbWhaleStats } from '../lib/databento';
 
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const utcHM = (t: number) => new Date(t * 1000).toISOString().slice(11, 16);
@@ -320,7 +320,6 @@ export function NewsPanel({ candles, balance, riskPct, onAlert, onChange, ctx }:
 
 export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]; onAlert: (msg: string) => void; onStatus?: (ok: boolean | null) => void }) {
   const [open, setOpen] = useState(true);
-  const [dbKey, setDbKey] = useState(loadDbKey);
   const [dbMsg, setDbMsg] = useState('');
   const [dbOk, setDbOk] = useState(false);
   const [dbBusy, setDbBusy] = useState(false);
@@ -339,17 +338,13 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whales]);
 
-  const verify = async () => {
-    setDbMsg('جارٍ التحقق…');
-    saveDbKey(dbKey);
-    const r = await checkDbKey(dbKey);
-    setDbOk(r.ok);
-    onStatus?.(r.ok ? true : false);
-    setDbMsg(r.msg);
-  };
-
   const scan = async () => {
-    if (!dbKey) return;
+    const dbKey = loadDbKey();
+    if (!dbKey) {
+      setDbMsg('لا يوجد مفتاح — أضفه من صفحة الإعدادات ⚙️ أعلى الشاشة');
+      onStatus?.(null);
+      return;
+    }
     setDbBusy(true);
     setDbMsg('جارٍ سحب صفقات GC من CME (آخر 3 ساعات)…');
     try {
@@ -394,18 +389,9 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
           ))}
 
           <div className="rounded-sm border border-dashed border-[#2a3a5f] p-2">
-            <div className="mb-1 text-[9px] font-bold text-slate-400">تغذية Databento — صفقات المؤسسات (عقود GC / CME)</div>
-            <div className="mb-1 flex gap-1">
-              <input
-                type="password"
-                placeholder="Databento API Key"
-                value={dbKey}
-                onChange={(e) => setDbKey(e.target.value)}
-                className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-2 py-1 font-mono text-[9.5px] text-white outline-none focus:border-cyan-400/50"
-                dir="ltr"
-              />
-              <button onClick={verify} className="rounded-sm border border-cyan-400/40 px-2 py-1 text-[9.5px] font-bold text-cyan-300 transition hover:bg-cyan-400/10">تحقق</button>
-              <button onClick={scan} disabled={dbBusy || !dbKey} className="rounded-sm bg-cyan-400/15 px-2 py-1 text-[9.5px] font-bold text-cyan-200 transition hover:bg-cyan-400/25 disabled:opacity-40">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[9px] font-bold text-slate-400">تغذية Databento — صفقات المؤسسات (عقود GC / CME)</span>
+              <button onClick={scan} disabled={dbBusy} className="rounded-sm bg-cyan-400/15 px-2 py-0.5 text-[9px] font-bold text-cyan-200 transition hover:bg-cyan-400/25 disabled:opacity-40">
                 {dbBusy ? '…' : 'فحص الحيتان'}
               </button>
             </div>
@@ -435,7 +421,7 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
                 </div>
               </div>
             )}
-            <p className="mt-1 text-[8.5px] leading-relaxed text-slate-600">مفتاحك يُحفظ في متصفحك فقط. الصفقات من بورصة شيكاغو (عقد GC = 100 أونصة) — أكبر بصمات الحيتان تظهر قبل تحركات 10$+.</p>
+            <p className="mt-1 text-[8.5px] leading-relaxed text-slate-600">المفتاح يُضاف من صفحة الإعدادات ⚙️ ويُحفظ في متصفحك فقط. الصفقات من بورصة شيكاغو (عقد GC = 100 أونصة) — أكبر بصمات الحيتان تظهر قبل تحركات 10$+.</p>
           </div>
         </div>
       )}

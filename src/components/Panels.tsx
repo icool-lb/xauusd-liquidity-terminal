@@ -433,6 +433,7 @@ const EXPERT_META: ExpertDef[] = [
   { name: 'خبير Databento — أنا', role: 'صفقات المؤسسات من CME (عقد GC)', color: '#60a5fa', proposal: 'رصد أعماق السوق عبر MBP-10 لعقود الذهب' },
   { name: 'ماركو فيشر', role: 'متابعة استراتيجيات ومؤشرات المنصات الاحترافية', color: '#34d399', proposal: 'بناء إشارة مساعدة من أفضل شرط مؤشرات مثبت على بياناتنا' },
   { name: 'يوسف النجار', role: 'خبير بصمة الشموع — Candle DNA', color: '#a78bfa', proposal: 'قراءة DNA كل شمعة عبر 8 أطر وتحويلها إلى موجة تداول بمسار مستهدفات' },
+  { name: 'ساندي كوهين', role: 'خبيرة استراتيجيات ومؤشرات TradingView', color: '#34d399', proposal: 'دمج أفضل الاستراتيجيات المتفقة في صفقة واحدة بهدف 10$ على 0.01' },
 ];
 
 export interface CrewExtra {
@@ -440,6 +441,8 @@ export interface CrewExtra {
   whales: WhalePrint[];
   conds: ConditionStat[];
   dbOk: boolean | null;
+  stratBest?: { name: string; winRate: number; trades: number; netPnl: number } | null;
+  stratLive?: string;
 }
 
 export interface CrewWave { dir: 'up' | 'down' | 'flat'; strength: number; summary: string; path: { price: number; label: string }[]; }
@@ -504,6 +507,10 @@ export function CrewPanel({ a, st, lastCandleTime, extra, wave }: { a: DayAnalys
     })(),
     // يوسف النجار — بصمة الشموع
     wave ? `${wave.dir === 'flat' ? '◆ لا موجة الآن' : wave.dir === 'up' ? `▲ موجة صاعدة ${wave.strength}%` : `▼ موجة هابطة ${wave.strength}%`} — ${wave.path[0] ? `التالي: ${fmt(wave.path[0].price)} (${wave.path[0].label})` : 'أجمع بصمات الأطر…'}` : 'بانتظار سلالم الأطر الصغرى (دقيقة/5 دقائق)…',
+    // ساندي كوهين — مختبر الاستراتيجيات
+    extra?.stratBest
+      ? `الأفضل الآن: «${extra.stratBest.name}» — ربح ${extra.stratBest.winRate}% على ${extra.stratBest.trades} صفقة (+${extra.stratBest.netPnl}$/0.01) — ${extra.stratLive ? `الدمج يقول: ${extra.stratLive}` : 'لا إشارة دمج مفتوحة'}`
+      : 'المختبر يحتاج بيانات متصلة لاختبار الاستراتيجيات الثماني…',
   ];
 
   function autoDevCount(st2: BacktestFull | null, wl: number, nw: number, conds2?: ConditionStat[]): number {
@@ -548,7 +555,7 @@ export function CrewPanel({ a, st, lastCandleTime, extra, wave }: { a: DayAnalys
         <span className={`h-1.5 w-1.5 rounded-full ${kz ? 'animate-pulse bg-red-400' : 'bg-amber-400'}`} />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">طاقم الخبراء — مراقبة لحظية</h3>
         <div className="h-px flex-1 bg-[#1a2540]" />
-        <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (12)'}</span>
+        <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (13)'}</span>
       </button>
       {open && (
         <div className="space-y-1.5">

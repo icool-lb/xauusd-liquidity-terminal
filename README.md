@@ -58,3 +58,19 @@ src/
 ## إخلاء مسؤولية
 
 هذه المنصة أداة تحليل تعليمية وليست نصيحة استثمارية. تداول الذهب ينطوي على مخاطر عالية.
+
+## تنبيهات TradingView على هاتفك 24/7 (V19)
+
+حساب TradingView المدفوع يطلق Webhook Alerts من خوادم TradingView مباشرة — لا حاجة لإبقاء المتصفح مفتوحاً:
+
+1. أنشئ بوت Telegram عبر @BotFather واحفظ التوكن.
+2. أرسل رسالة لبوتك، ثم افتح `https://api.telegram.org/bot<TOKEN>/getUpdates` لمعرفة `chat_id`.
+3. في Vercel: Settings ← Environment Variables أضف:
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_CHAT_ID`
+   - `TV_HOOK_KEY` (كلمة سر تخترها أنت)
+4. في TradingView أنشئ تنبيهاً ← Notifications ← Webhook URL:
+   `https://xauusd-liquidity-terminal.vercel.app/api/tv-hook?key=<TV_HOOK_KEY>`
+5. رسالة التنبيه مثلاً: `{"side":"buy","price":{{close}},"sl":{{close}}-15,"tp":{{close}}+10,"note":"اختراق قمة آسيا"}`
+
+ستصلك رسالة Telegram فور إطلاق التنبيه مهما كان هاتفك مغلقاً.

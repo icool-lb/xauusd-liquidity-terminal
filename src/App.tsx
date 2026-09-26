@@ -3,6 +3,8 @@ import GoldChart from './components/GoldChart';
 import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
 import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
 import { DnaPanel } from './components/DnaPanel';
+import { StratPanel } from './components/StratPanel';
+import { runStrategyLab, mergedPlan } from './lib/strategies';
 import { buildTfLadder, buildWave, waveSpeech } from './lib/dna';
 import { unlockAudio, setVoice, beep as beepLib, speak, signalChime } from './lib/audio';
 import {
@@ -137,6 +139,9 @@ export default function App() {
   const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, BT_DAYS) : null), [all]);
   const whales = useMemo(() => detectWhales(all), [all]);
   const conds = useMemo(() => analyzeConditions(all), [all]);
+  // مختبر الاستراتيجيات (ساندي كوهين)
+  const stratResults = useMemo(() => (all.length >= 300 ? runStrategyLab(all) : []), [all]);
+  const stratPlan = useMemo(() => mergedPlan(stratResults, analysis?.lastPrice ?? 0), [stratResults, analysis]);
   // خبير DNA: سلم الأطر الثمانية + موجة التداول
   const tfLadder = useMemo(() => buildTfLadder(m1Data, m5Data, all), [m1Data, m5Data, all]);
   const wave = useMemo(() => {
@@ -245,7 +250,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V18</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V19</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -519,7 +524,11 @@ export default function App() {
             a={analysis}
             st={stats}
             lastCandleTime={all.length ? all[all.length - 1].time : 0}
-            extra={{ news: newsList, whales, conds, dbOk }}
+            extra={{
+              news: newsList, whales, conds, dbOk,
+              stratBest: stratResults[0] ?? null,
+              stratLive: stratPlan && stratPlan.side !== 'flat' ? `${stratPlan.side === 'long' ? 'شراء' : 'بيع'} بثقة ${stratPlan.confidence}%` : undefined,
+            }}
             wave={wave}
           />
           <DevPanel st={stats} whales={whales} newsCount={newsList.filter((e) => e.time + 3600 > Date.now() / 1000).length} conds={conds} />
@@ -545,6 +554,7 @@ export default function App() {
           />
           <WhalePanel whales={whales} onAlert={crewAlert} onStatus={setDbOk} />
           <DnaPanel tfs={tfLadder} wave={wave} />
+          {liveStatus === 'ok' && <StratPanel candles={all} price={lastPrice} />}
           <SessionPlan />
           <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
             بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.

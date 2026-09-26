@@ -106,7 +106,8 @@ export async function fetchWeekCalendar(): Promise<NewsEvent[]> {
   for (const e of raw) {
     if (e.country !== 'USD') continue; // الذهب يرد أساساً على الدولار
     const t = Math.floor(new Date(e.date).getTime() / 1000);
-    if (!Number.isFinite(t) || t + 7200 < now) continue; // تجاهل المنتهي قبل ساعتين
+    // نحتفظ بأخبار آخر 7 أيام (لتحليل ربط الأخبار بالحركة) — العرض القادم يفلتر نفسه
+    if (!Number.isFinite(t) || t < now - 7 * 86400) continue;
     const impact = classifyImpact(e.title, e.impact);
     if (impact === 'low') continue;
     out.push({
@@ -135,5 +136,5 @@ export async function fetchWeekCalendar(): Promise<NewsEvent[]> {
   if (usedSkeleton || coveredUntil < nextWeekStart + 86400) {
     out.push(...nextWeekSkeleton());
   }
-  return out.sort((a, b) => a.time - b.time).slice(0, 50);
+  return out.sort((a, b) => a.time - b.time).slice(-50); // الأحدث 50 (الأقدم تُهمَل)
 }

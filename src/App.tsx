@@ -5,6 +5,8 @@ import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
 import { DnaPanel } from './components/DnaPanel';
 import { StratPanel } from './components/StratPanel';
 import { BtExpertPanel } from './components/BtExpertPanel';
+import { RoadmapStrip, type RoadmapInfo, type DbConfirm } from './components/RoadmapStrip';
+import { loadDbKey, fetchGcTrades, analyzeWhales } from './lib/databento';
 import { loadBtJournal } from './lib/btsuite';
 import { runStrategyLab, mergedPlan } from './lib/strategies';
 import { buildTfLadder, buildWave, waveSpeech } from './lib/dna';
@@ -171,8 +173,79 @@ export default function App() {
     crewAlert(`🌊 يوسف النجار (خبير بصمة الشموع): ${waveSpeech(wave)}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wave, dayOffset]);
+
+  // ---- خارطة الطريق: الهدف + منطقة سحب السيولة + أرقام الاختبار ----
+  const roadmap = useMemo((): RoadmapInfo | null => {
+    if (!wave || !analysis || wave.dir === 'flat' || !wave.path.length) return null;
+    const sgn = wave.dir === 'up' ? 1 : -1;
+    const un = analysis.levels.filter((l) => !l.swept && l.kind !== 'OPEN' && Number.isFinite(l.price));
+    const liqLvl = un
+      .filter((l) => (sgn > 0 ? l.price > analysis.lastPrice : l.price < analysis.lastPrice))
+      .sort((a, b) => Math.abs(a.price - analysis.lastPrice) - Math.abs(b.price - analysis.lastPrice))[0] ?? null;
+    const seen = new Set<number>();
+    const testNumbers: { price: number; label: string }[] = [];
+    const push = (p: number, label: string) => {
+      const k = Math.round(p * 10);
+      if (seen.has(k) || Math.abs(p - analysis.lastPrice) < 0.6) return;
+      seen.add(k);
+      testNumbers.push({ price: +p.toFixed(2), label });
+    };
+    wave.path.forEach((p, i) => push(p.price, i === 0 ? 'أول اختبار' : 'هدف ثانٍ'));
+    wave.horizons.forEach((h) => push(h.mid, `توقع ${h.label}`));
+    testNumbers.sort((a, b) => (sgn > 0 ? a.price - b.price : b.price - a.price));
+    return {
+      dir: wave.dir,
+      target: wave.path[0].price,
+      eta: wave.path[0].eta,
+      liq: liqLvl ? { price: liqLvl.price, label: liqLvl.label } : null,
+      testNumbers: testNumbers.slice(0, 5),
+    };
+  }, [wave, analysis]);
+
+  // ---- تأكيد Databento للموجة: فحص تدفق GC كل 10 دقائق ----
   const [newsList, setNewsList] = useState<NewsEvent[]>([]);
   const [dbOk, setDbOk] = useState<boolean | null>(null);
+  const [dbConfirm, setDbConfirm] = useState<DbConfirm | null>(null);
+  useEffect(() => {
+    if (!dbOk) return;
+    let dead = false;
+    const tick = async () => {
+      const key = loadDbKey();
+      if (!key || dead) return;
+      try {
+        const trades = await fetchGcTrades(key, 1.5);
+        if (dead) return;
+        if (!trades.length) { setDbConfirm(null); return; } // خارج ساعات CME
+        const s = analyzeWhales(trades);
+        const totalVol = s.buyVol + s.sellVol;
+        if (!totalVol) return;
+        const ratio = s.buyVol / totalVol;
+        const d = wave?.dir;
+        const ok: boolean | null =
+          d && d !== 'flat'
+            ? d === 'up'
+              ? ratio >= 0.56 ? true : ratio <= 0.46 ? false : null
+              : ratio <= 0.44 ? true : ratio >= 0.54 ? false : null
+            : null;
+        setDbConfirm({ ok, ratio, total: s.total, time: Date.now() });
+      } catch { /* نحتفظ بآخر قيمة ناجحة */ }
+    };
+    void tick();
+    const id = setInterval(tick, 600_000);
+    return () => { dead = true; clearInterval(id); };
+  }, [dbOk, wave?.dir]);
+
+  // تنبيه صوتي عند انقلاب تأكيد Databento إلى معاكس للموجة
+  const lastDbAlert = useRef(0);
+  useEffect(() => {
+    if (dbConfirm?.ok !== false || !wave || wave.dir === 'flat' || dayOffset !== 0) return;
+    const t = Date.now();
+    if (t - lastDbAlert.current < 1200_000) return;
+    lastDbAlert.current = t;
+    crewAlert(`⚠️ جيك ليفيت (Databento): تدفق المؤسسات ${wave.dir === 'up' ? 'بيعي يعاكس الموجة الصاعدة' : 'شرائي يعاكس الموجة الهابطة'} — الانتظار أفضل من الدخول عكس رأس المال`, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbConfirm, wave, dayOffset]);
+
   const displayCandles = useMemo(() => aggregate(all, tf), [all, tf]);
 
   // تحيز H1: إغلاق آخر ساعة مقابل متوسط آخر 8 ساعات
@@ -259,7 +332,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V21</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V22</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#1a2540]" />
@@ -314,6 +387,17 @@ export default function App() {
           </span>
         </div>
       </header>
+
+      {/* ===== شريط خارطة الطريق: التوجه + أرقام الاختبار + تأكيد Databento ===== */}
+      {liveStatus === 'ok' && (
+        <RoadmapStrip
+          price={lastPrice}
+          roadmap={roadmap}
+          archive={archiveMode}
+          hasDbKey={!!loadDbKey()}
+          dbConfirm={dbConfirm}
+        />
+      )}
 
       {/* ===== شريط المستويات ===== */}
       {analysis && (
@@ -549,6 +633,7 @@ export default function App() {
           />
           <DevPanel st={stats} whales={whales} newsCount={newsList.filter((e) => e.time + 3600 > Date.now() / 1000).length} conds={conds} />
           <NewsPanel
+            candles={all}
             balance={account}
             riskPct={riskPct}
             onAlert={crewAlert}

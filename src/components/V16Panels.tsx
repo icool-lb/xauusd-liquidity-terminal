@@ -4,6 +4,8 @@ import {
   type BacktestFull, type NewsEvent, type WhalePrint, type ConditionStat, type NewsCtx,
 } from '../lib/engine';
 import { fetchWeekCalendar } from '../lib/newsfeed';
+import { analyzeNewsCorrelation } from '../lib/newscorr';
+import type { Candle } from '../lib/engine';
 import { loadDbKey, saveDbKey, checkDbKey, fetchGcTrades, analyzeWhales, type DbWhaleStats } from '../lib/databento';
 
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -109,8 +111,8 @@ function saveNews(list: NewsEvent[]) {
   try { localStorage.setItem(LS_NEWS, JSON.stringify(list)); } catch { /* تجاهل */ }
 }
 
-export function NewsPanel({ balance, riskPct, onAlert, onChange, ctx }: {
-  balance: number; riskPct: number; onAlert: (msg: string) => void;
+export function NewsPanel({ candles, balance, riskPct, onAlert, onChange, ctx }: {
+  candles: Candle[]; balance: number; riskPct: number; onAlert: (msg: string) => void;
   onChange?: (list: NewsEvent[]) => void; ctx?: NewsCtx | null;
 }) {
   const [list, setList] = useState<NewsEvent[]>(loadNews);
@@ -183,6 +185,8 @@ export function NewsPanel({ balance, riskPct, onAlert, onChange, ctx }: {
 
   const upcoming = list.filter((e) => e.time + 7200 > now).slice(0, 6);
   const sug = newsLotSuggestion(balance || 1000, riskPct || 1, 15);
+  // ربط الأخبار بالحركة الحادة الفعلية في شموعك
+  const corr = useMemo(() => analyzeNewsCorrelation(candles, list), [candles, list]);
 
   return (
     <div className="rounded-sm border border-red-400/25 bg-[#0c1220] p-2">
@@ -199,6 +203,31 @@ export function NewsPanel({ balance, riskPct, onAlert, onChange, ctx }: {
             <p className={`flex-1 text-[9px] leading-relaxed ${autoOk === true ? 'text-emerald-400/90' : 'text-slate-400'}`}>{autoMsg || 'جارٍ التهيئة…'}</p>
             <button onClick={autoLoad} className="shrink-0 rounded-sm border border-[#2a3a5f] px-1.5 py-0.5 text-[8.5px] text-slate-400 transition hover:border-red-400/40 hover:text-red-300">تحديث الجدول</button>
           </div>
+
+          {/* ربط الأخبار بالحركة: لينا تقارن الارتفاعات/الهبوط الحاد بأوقات الأخبار */}
+          {corr.sharpTotal > 2 && (
+            <div className="rounded-sm border border-red-400/30 bg-red-400/5 p-2">
+              <div className="mb-1 text-[9px] font-black text-red-300">🔗 ربط الأخبار بالحركة — آخر {corr.windowDays} أيام من بياناتك</div>
+              <p className="text-[9.5px] leading-relaxed text-slate-300">
+                لينا رصدت <b className="text-white">{corr.sharpTotal}</b> حركة حادة (≥2.3×ATR):
+                {' '}<b className="text-emerald-300">{corr.matched} مرتبطة بخبر ({corr.matchPct}%)</b>
+                {corr.matched > 0 && <> بمتوسط <b className="text-white">{corr.avgMove}$</b> بعد <b className="text-white">{corr.avgDelayMin} دقيقة</b> من الصدور</>}
+                {' — '}<b className="text-amber-300">{corr.unMatched} بلا خبر مرتبط</b> (حركة مؤسسية/جيوسياسية مفاجئة).
+              </p>
+              {corr.rows.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  {corr.rows.map((m, i) => (
+                    <div key={i} className="flex items-center gap-1.5 border-b border-[#101828] py-0.5 text-[9px]">
+                      <span dir="ltr" className="shrink-0 font-mono text-slate-500">{new Date(m.time * 1000).toISOString().slice(5, 16).replace('T', ' ')}</span>
+                      <span className={`shrink-0 font-bold ${m.dir === 'up' ? 'text-emerald-300' : 'text-red-300'}`}>{m.dir === 'up' ? '▲' : '▼'} {m.size}$</span>
+                      <span className="flex-1 truncate text-slate-400">{m.event?.title}</span>
+                      <span className="shrink-0 text-slate-600">{m.gapMin !== null ? (m.gapMin >= 0 ? `بعد ${m.gapMin}د` : `قبل ${Math.abs(m.gapMin)}د`) : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {upcoming.map((ev) => {
             const f = forecastNews(ev, ctx ?? null);

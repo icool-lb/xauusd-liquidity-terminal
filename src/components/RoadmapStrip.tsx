@@ -71,6 +71,8 @@ export function RoadmapStrip({ price, roadmap, archive, hasDbKey, dbConfirm }: {
           <span className="rounded-sm border border-[#3a3a44] px-2 py-0.5 text-[9px] text-slate-500">🔌 أدخل مفتاح Databento في لوحة الحيتان لتأكيد التوجه لحظياً</span>
         ) : dbConfirm === null ? (
           <span className="animate-pulse rounded-sm border border-amber-400/30 px-2 py-0.5 text-[9px] text-amber-300">⏳ جارٍ فحص تدفق GC من CME…</span>
+        ) : dbConfirm.total === 0 ? (
+          <span className="rounded-sm border border-slate-400/30 px-2 py-0.5 text-[9px] text-slate-400">🌙 سوق CME مغلق — يُستأنف فحص التدفق تلقائياً عند الافتتاح</span>
         ) : dbConfirm.ok === true ? (
           <span className="rounded-sm border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold text-emerald-300">
             ✅ Databento يؤكد التوجه: {Math.round((up ? dbConfirm.ratio : 1 - dbConfirm.ratio) * 100)}% {up ? 'شراء' : 'بيع'} عدواني

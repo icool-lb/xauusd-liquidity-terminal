@@ -217,7 +217,7 @@ export default function App() {
       try {
         const trades = await fetchGcTrades(key, 1.5);
         if (dead) return;
-        if (!trades.length) { setDbConfirm(null); return; } // خارج ساعات CME
+        if (!trades.length) { setDbConfirm({ ok: null, ratio: 0, total: 0, time: Date.now() }); return; } // خارج ساعات CME — سوق مغلق
         const s = analyzeWhales(trades);
         const totalVol = s.buyVol + s.sellVol;
         if (!totalVol) return;

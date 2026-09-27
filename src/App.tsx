@@ -327,17 +327,17 @@ export default function App() {
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div dir="rtl" className="flex h-screen flex-col bg-[#050810] text-slate-200 scanlines">
+    <div dir="rtl" className="flex h-screen flex-col bg-[#0a0a0c] text-slate-200 scanlines">
       {/* ===== الرأس ===== */}
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#1a2540] bg-[#080c16] px-4 py-1.5">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#2c2c33] bg-[#131316] px-4 py-1.5">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V23</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V25</div>
           </div>
         </div>
-        <div className="h-6 w-px bg-[#1a2540]" />
+        <div className="h-6 w-px bg-[#2c2c33]" />
         <div dir="ltr" className="flex items-baseline gap-2 font-mono">
           <span className="text-lg font-black text-white">{lastPrice ? fmt(lastPrice) : '—'}</span>
           {lastPrice > 0 && (
@@ -366,21 +366,21 @@ export default function App() {
           <button
             onClick={() => setSoundOn((v) => !v)}
             title="تنبيه نغمة عند الإشارات"
-            className={`rounded-sm border px-2 py-1 text-[11px] transition ${soundOn ? 'border-amber-400/40 text-amber-300' : 'border-[#2a3a5f] text-slate-600'}`}
+            className={`rounded-sm border px-2 py-1 text-[11px] transition ${soundOn ? 'border-amber-400/40 text-amber-300' : 'border-[#3a3a44] text-slate-600'}`}
           >
             {soundOn ? '🔔' : '🔕'}
           </button>
           <button
             onClick={() => { const nv = !voiceOn; setVoiceOn(nv); setVoice(nv); }}
             title="إعلام صوتي منطوق بالعربية"
-            className={`rounded-sm border px-2 py-1 text-[11px] transition ${voiceOn ? 'border-emerald-400/40 text-emerald-300' : 'border-[#2a3a5f] text-slate-600'}`}
+            className={`rounded-sm border px-2 py-1 text-[11px] transition ${voiceOn ? 'border-emerald-400/40 text-emerald-300' : 'border-[#3a3a44] text-slate-600'}`}
           >
             {voiceOn ? '🗣' : '🤐'}
           </button>
           <button
             onClick={() => { unlockAudio(); beepLib(880); setTimeout(() => beepLib(1174), 250); speak('الصوت يعمل يا بطل'); }}
             title="اختبار الصوت والنطق"
-            className="rounded-sm border border-[#2a3a5f] px-2 py-1 text-[11px] text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-300"
+            className="rounded-sm border border-[#3a3a44] px-2 py-1 text-[11px] text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-300"
           >
             🔊
           </button>
@@ -403,7 +403,7 @@ export default function App() {
 
       {/* ===== شريط المستويات ===== */}
       {analysis && (
-        <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-[#1a2540] bg-[#070b14] px-4 py-1.5 text-[10px]">
+        <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-[#2c2c33] bg-[#070b14] px-4 py-1.5 text-[10px]">
           {([
             ['قمة الأمس', analysis.pdh, 'text-violet-300'],
             ['ق لندن', analysis.londonHigh, 'text-cyan-200'],
@@ -416,7 +416,7 @@ export default function App() {
             ['إغلاق نيويورك أمس', analysis.prevNyClose, 'text-orange-300'],
             ['قاع الأمس', analysis.pdl, 'text-violet-300'],
           ] as [string, number, string][]).filter(([, v]) => Number.isFinite(v)).map(([l, v, c], i) => (
-            <div key={i} className="flex shrink-0 items-center gap-1.5 rounded-sm bg-[#0c1220] px-2.5 py-1">
+            <div key={i} className="flex shrink-0 items-center gap-1.5 rounded-sm bg-[#1a1a1e] px-2.5 py-1">
               <span className="text-slate-500">{l}</span>
               <span dir="ltr" className={`font-mono font-bold ${c}`}>{fmt(v)}</span>
             </div>
@@ -435,13 +435,13 @@ export default function App() {
       )}
 
       {/* ===== الخط الزمني للجلسات ===== */}
-      <div className="shrink-0 border-b border-[#1a2540] bg-[#050810] px-4">
+      <div className="shrink-0 border-b border-[#2c2c33] bg-[#0a0a0c] px-4">
         <SessionTimeline />
       </div>
 
       {/* ===== تنبيه الإشارة ===== */}
       {toast && (
-        <div className="absolute left-1/2 top-14 z-50 -translate-x-1/2 rounded-md border border-amber-400/60 bg-[#0c1220] px-4 py-2 text-[12px] font-bold text-amber-300 shadow-[0_0_30px_rgba(251,191,36,0.25)]">
+        <div className="absolute left-1/2 top-14 z-50 -translate-x-1/2 rounded-md border border-amber-400/60 bg-[#1a1a1e] px-4 py-2 text-[12px] font-bold text-amber-300 shadow-[0_0_30px_rgba(251,191,36,0.25)]">
           ⚡ {toast}
         </div>
       )}
@@ -449,7 +449,7 @@ export default function App() {
       {/* ===== الجسم ===== */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* العمود الأيمن: الاتصال + المستويات */}
-        <aside className="order-2 w-full shrink-0 space-y-5 border-b border-[#1a2540] bg-[#080c16] p-3 lg:order-1 lg:w-60 lg:border-b-0 lg:border-l lg:overflow-y-auto">
+        <aside className="order-2 w-full shrink-0 space-y-5 border-b border-[#2c2c33] bg-[#131316] p-3 lg:order-1 lg:w-60 lg:border-b-0 lg:border-l lg:overflow-y-auto">
           <ConnectionPanel
             creds={creds}
             status={liveStatus}
@@ -472,7 +472,7 @@ export default function App() {
                   key={d}
                   onClick={() => setDayOffset(d)}
                   className={`rounded-sm py-1 font-mono text-[10px] font-bold transition ${
-                    dayOffset === d ? 'bg-amber-400 text-black' : 'bg-[#0c1220] text-slate-400 hover:bg-[#111a2b]'
+                    dayOffset === d ? 'bg-amber-400 text-black' : 'bg-[#1a1a1e] text-slate-400 hover:bg-[#232329]'
                   }`}
                 >
                   {d === 0 ? 'اليوم' : `-${d}`}
@@ -489,7 +489,7 @@ export default function App() {
               <input
                 type="number" value={account} min={100} step={100}
                 onChange={(e) => setAccount(Number(e.target.value) || 0)}
-                className="mt-1 w-full rounded-sm border border-[#1a2540] bg-[#0c1220] px-2 py-1 font-mono text-[11px] text-white outline-none focus:border-amber-400/50"
+                className="mt-1 w-full rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-2 py-1 font-mono text-[11px] text-white outline-none focus:border-amber-400/50"
                 dir="ltr"
               />
             </label>
@@ -498,7 +498,7 @@ export default function App() {
               <input
                 type="number" value={riskPct} min={0.25} max={5} step={0.25}
                 onChange={(e) => setRiskPct(Number(e.target.value) || 1)}
-                className="mt-1 w-full rounded-sm border border-[#1a2540] bg-[#0c1220] px-2 py-1 font-mono text-[11px] text-white outline-none focus:border-amber-400/50"
+                className="mt-1 w-full rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-2 py-1 font-mono text-[11px] text-white outline-none focus:border-amber-400/50"
                 dir="ltr"
               />
             </label>
@@ -510,25 +510,25 @@ export default function App() {
           <div className="flex shrink-0 flex-wrap items-center gap-1 px-3 pt-2 text-[10px] font-bold">
             <button
               onClick={() => setChartView('engine')}
-              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'engine' ? 'bg-[#111a2b] text-amber-300' : 'text-slate-500 hover:text-white'}`}
+              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'engine' ? 'bg-[#232329] text-amber-300' : 'text-slate-500 hover:text-white'}`}
             >
               شارت التحليل
             </button>
             <button
               onClick={() => setChartView('tv')}
-              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'tv' ? 'bg-[#111a2b] text-amber-300' : 'text-slate-500 hover:text-white'}`}
+              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'tv' ? 'bg-[#232329] text-amber-300' : 'text-slate-500 hover:text-white'}`}
             >
               TradingView مباشر
             </button>
             <button
               onClick={() => setChartView('settings')}
-              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'settings' ? 'bg-[#111a2b] text-amber-300' : 'text-slate-500 hover:text-white'}`}
+              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'settings' ? 'bg-[#232329] text-amber-300' : 'text-slate-500 hover:text-white'}`}
             >
               ⚙️ الإعدادات
             </button>
             {/* مبدّل الفريمات */}
             {chartView === 'engine' && (
-              <div dir="ltr" className="flex rounded-sm border border-[#2a3a5f] p-0.5 font-mono text-[9px]">
+              <div dir="ltr" className="flex rounded-sm border border-[#3a3a44] p-0.5 font-mono text-[9px]">
                 {[[300, '5m'], [900, '15m'], [1800, '30m'], [3600, '1H'], [14400, '4H'], [86400, '1D']].map(([s, l]) => (
                   <button
                     key={s}
@@ -561,7 +561,7 @@ export default function App() {
                     onClick={() => setLayers((s) => ({ ...s, [k]: !s[k] }))}
                     className="shrink-0 rounded-sm border px-2 py-1 transition active:scale-95"
                     style={{
-                      borderColor: layers[k] ? col : '#1a2540',
+                      borderColor: layers[k] ? col : '#2c2c33',
                       color: layers[k] ? col : '#64748b',
                       background: layers[k] ? col + '18' : 'transparent',
                     }}
@@ -585,7 +585,7 @@ export default function App() {
             </div>
           )}
           <div className="min-h-0 flex-1 p-2">
-            <div className="relative h-full overflow-hidden rounded-md border border-[#1a2540] bg-[#050810] p-1">
+            <div className="relative h-full overflow-hidden rounded-md border border-[#2c2c33] bg-[#0a0a0c] p-1">
               {chartView === 'settings' ? (
                 <SettingsPage
                   creds={creds}
@@ -624,13 +624,13 @@ export default function App() {
               )}
             </div>
           </div>
-          <div className="shrink-0 border-t border-[#1a2540] bg-[#080c16] px-4 py-3">
+          <div className="shrink-0 border-t border-[#2c2c33] bg-[#131316] px-4 py-3">
             {analysis && <EventsLog a={analysis} />}
           </div>
         </main>
 
         {/* العمود الأيسر: الإشارة */}
-        <aside className="order-3 w-full shrink-0 space-y-5 border-t border-[#1a2540] bg-[#080c16] p-3 lg:w-72 lg:border-r lg:border-t-0 lg:overflow-y-auto">
+        <aside className="order-3 w-full shrink-0 space-y-5 border-t border-[#2c2c33] bg-[#131316] p-3 lg:w-72 lg:border-r lg:border-t-0 lg:overflow-y-auto">
           <SignalCard s={dayOffset === 0 ? sig : analysis?.signals[0] ?? null} bias={analysis?.bias ?? 'neutral'} />
           <RiskCalc s={sig} account={account} riskPct={riskPct} />
           <TimingPanel
@@ -686,7 +686,7 @@ export default function App() {
           {liveStatus === 'ok' && <BtExpertPanel candles={labData} />}
           {liveStatus === 'ok' && <StratPanel candles={labData} price={lastPrice} />}
           <SessionPlan />
-          <p className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2 text-[9.5px] leading-relaxed text-slate-600">
+          <p className="rounded-sm border border-[#2c2c33] bg-[#1a1a1e] p-2 text-[9.5px] leading-relaxed text-slate-600">
             بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.
           </p>
         </aside>

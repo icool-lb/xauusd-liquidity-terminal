@@ -17,7 +17,7 @@ import {
 export interface AutoLayers { fvg: boolean; bos: boolean; liq: boolean; sess: boolean; ob: boolean }
 
 const C = {
-  bg: '#050810', grid: '#101830',
+  bg: '#0a0a0c', grid: '#101830',
   up: '#34d399', down: '#f87171',
   open: '#22d3ee', asia: '#fbbf24', pd: '#a78bfa',
 };
@@ -52,11 +52,11 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
         fontSize: 10,
       },
       grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
-      rightPriceScale: { borderColor: '#1a2540' },
-      timeScale: { borderColor: '#1a2540', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: '#2c2c33' },
+      timeScale: { borderColor: '#2c2c33', timeVisible: true, secondsVisible: false },
       crosshair: {
-        vertLine: { color: '#2a3a5f', labelBackgroundColor: '#1a2540' },
-        horzLine: { color: '#2a3a5f', labelBackgroundColor: '#1a2540' },
+        vertLine: { color: '#3a3a44', labelBackgroundColor: '#2c2c33' },
+        horzLine: { color: '#3a3a44', labelBackgroundColor: '#2c2c33' },
       },
       handleScroll: { pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
       handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
@@ -427,7 +427,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
       out.width = W; out.height = H + Math.round(H * 0.07);
       const octx = out.getContext('2d');
       if (!octx) throw new Error('canvas');
-      octx.fillStyle = '#050810';
+      octx.fillStyle = '#0a0a0c';
       octx.fillRect(0, 0, out.width, out.height);
       octx.drawImage(lib, 0, Math.round(H * 0.07));
       octx.drawImage(ov, 0, Math.round(H * 0.07));
@@ -465,12 +465,12 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
   };
 
   const ctrlBtn =
-    'flex h-7 w-7 items-center justify-center rounded-sm border border-[#2a3a5f] bg-[#0c1220e6] text-[13px] font-bold text-slate-300 transition hover:border-amber-400/60 hover:text-amber-300 active:scale-90';
+    'flex h-7 w-7 items-center justify-center rounded-sm border border-[#3a3a44] bg-[#1a1a1ee6] text-[13px] font-bold text-slate-300 transition hover:border-amber-400/60 hover:text-amber-300 active:scale-90';
 
   return (
     <div
       ref={ref}
-      className={full ? 'fixed inset-0 z-[100] bg-[#050810]' : 'relative h-full w-full'}
+      className={full ? 'fixed inset-0 z-[100] bg-[#0a0a0c]' : 'relative h-full w-full'}
       dir="ltr"
     >
       <canvas ref={canvasRef} data-overlay className="pointer-events-none absolute inset-0 z-10" />

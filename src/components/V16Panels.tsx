@@ -64,7 +64,7 @@ export function DevPanel({ st, whales, newsCount, conds }: { st: BacktestFull | 
   const stageColor = ['#fbbf24', '#22d3ee', '#a78bfa', '#34d399'];
 
   return (
-    <div className="rounded-sm border border-amber-400/25 bg-[#0c1220] p-2">
+    <div className="rounded-sm border border-amber-400/25 bg-[#1a1a1e] p-2">
       <div className="mb-1.5 flex items-center gap-1.5">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-300">مدير تطوير المنصة — دورة الاقتراحات</h3>
@@ -76,17 +76,17 @@ export function DevPanel({ st, whales, newsCount, conds }: { st: BacktestFull | 
         {proposals.slice(-5).reverse().map((p) => {
           const s = stageOf(p);
           return (
-            <div key={p.id} className="rounded-sm border border-[#1a2540] bg-[#080c16] p-2">
+            <div key={p.id} className="rounded-sm border border-[#2c2c33] bg-[#131316] p-2">
               <div className="mb-0.5 flex items-center gap-1.5">
                 <span className="text-[9px] font-black" style={{ color: p.color }}>{p.by}</span>
-                <span className="h-px flex-1 bg-[#1a2540]" />
+                <span className="h-px flex-1 bg-[#2c2c33]" />
                 <span className="text-[8.5px] font-bold" style={{ color: stageColor[s] }}>{STAGES[s]}</span>
               </div>
               <p className="text-[10px] leading-relaxed text-slate-300">{p.text}</p>
               <p className="mt-0.5 text-[9px] text-emerald-400/80">🎯 الهدف: {p.goal}</p>
               <div className="mt-1 flex gap-0.5">
                 {STAGES.map((_, i) => (
-                  <div key={i} className="h-0.5 flex-1 rounded-full" style={{ background: i <= s ? stageColor[i] : '#1a2540' }} />
+                  <div key={i} className="h-0.5 flex-1 rounded-full" style={{ background: i <= s ? stageColor[i] : '#2c2c33' }} />
                 ))}
               </div>
             </div>
@@ -189,11 +189,11 @@ export function NewsPanel({ candles, balance, riskPct, onAlert, onChange, ctx }:
   const corr = useMemo(() => analyzeNewsCorrelation(candles, list), [candles, list]);
 
   return (
-    <div className="rounded-sm border border-red-400/25 bg-[#0c1220] p-2">
+    <div className="rounded-sm border border-red-400/25 bg-[#1a1a1e] p-2">
       <button onClick={() => setOpen((v) => !v)} className="mb-1.5 flex w-full items-center gap-1.5 text-right">
         <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-300">مديرة الأخبار — تنظيم ذاتي وتوقعات</h3>
-        <div className="h-px flex-1 bg-[#1a2540]" />
+        <div className="h-px flex-1 bg-[#2c2c33]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض'}</span>
       </button>
       {open && (
@@ -201,7 +201,7 @@ export function NewsPanel({ candles, balance, riskPct, onAlert, onChange, ctx }:
           <div className="flex items-center gap-1.5">
             <span className={`h-1.5 w-1.5 rounded-full ${autoOk === true ? 'bg-emerald-400' : autoOk === false ? 'bg-amber-400' : 'animate-pulse bg-red-400'}`} />
             <p className={`flex-1 text-[9px] leading-relaxed ${autoOk === true ? 'text-emerald-400/90' : 'text-slate-400'}`}>{autoMsg || 'جارٍ التهيئة…'}</p>
-            <button onClick={autoLoad} className="shrink-0 rounded-sm border border-[#2a3a5f] px-1.5 py-0.5 text-[8.5px] text-slate-400 transition hover:border-red-400/40 hover:text-red-300">تحديث الجدول</button>
+            <button onClick={autoLoad} className="shrink-0 rounded-sm border border-[#3a3a44] px-1.5 py-0.5 text-[8.5px] text-slate-400 transition hover:border-red-400/40 hover:text-red-300">تحديث الجدول</button>
           </div>
 
           {/* ربط الأخبار بالحركة: لينا تقارن الارتفاعات/الهبوط الحاد بأوقات الأخبار */}
@@ -217,7 +217,7 @@ export function NewsPanel({ candles, balance, riskPct, onAlert, onChange, ctx }:
               {corr.rows.length > 0 && (
                 <div className="mt-1 space-y-0.5">
                   {corr.rows.map((m, i) => (
-                    <div key={i} className="flex items-center gap-1.5 border-b border-[#101828] py-0.5 text-[9px]">
+                    <div key={i} className="flex items-center gap-1.5 border-b border-[#222227] py-0.5 text-[9px]">
                       <span dir="ltr" className="shrink-0 font-mono text-slate-500">{new Date(m.time * 1000).toISOString().slice(5, 16).replace('T', ' ')}</span>
                       <span className={`shrink-0 font-bold ${m.dir === 'up' ? 'text-emerald-300' : 'text-red-300'}`}>{m.dir === 'up' ? '▲' : '▼'} {m.size}$</span>
                       <span className="flex-1 truncate text-slate-400">{m.event?.title}</span>
@@ -234,7 +234,7 @@ export function NewsPanel({ candles, balance, riskPct, onAlert, onChange, ctx }:
             const mins = Math.round((ev.time - now) / 60);
             const sideColor = f.leanSide === 'up' ? 'text-emerald-300' : f.leanSide === 'down' ? 'text-red-300' : 'text-amber-300';
             return (
-              <div key={ev.id} className="rounded-sm border border-[#1a2540] bg-[#080c16] p-2">
+              <div key={ev.id} className="rounded-sm border border-[#2c2c33] bg-[#131316] p-2">
                 <div className="flex items-center gap-1.5">
                   <span className={`rounded-sm px-1.5 py-0.5 text-[8.5px] font-black ${ev.impact === 'high' ? 'bg-red-400/15 text-red-300' : 'bg-amber-400/15 text-amber-300'}`}>
                     {ev.impact === 'high' ? 'عالي' : 'متوسط'}
@@ -250,12 +250,12 @@ export function NewsPanel({ candles, balance, riskPct, onAlert, onChange, ctx }:
                   {ev.forecast && <span className="mr-2">توقعات السوق: {ev.forecast}</span>}
                   {ev.previous && <span className="mr-2">سابق: {ev.previous}</span>}
                 </div>
-                <div className="mt-1 rounded-sm bg-[#0c1220] p-1.5">
+                <div className="mt-1 rounded-sm bg-[#1a1a1e] p-1.5">
                   <p className={`text-[9.5px] font-bold leading-relaxed ${sideColor}`}>🔮 توقع لينا: {f.lean}</p>
                   <div className="mt-1 space-y-0.5">
                     {f.scenarios.map((s, i) => (
                       <div key={i} className="flex items-center gap-1.5 text-[9px] text-slate-400">
-                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#1a2540]">
+                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#2c2c33]">
                           <div className="h-full bg-red-400/70" style={{ width: `${s.prob}%` }} />
                         </div>
                         <span dir="ltr" className="w-7 shrink-0 text-center font-mono text-slate-500">{s.prob}%</span>
@@ -274,34 +274,34 @@ export function NewsPanel({ candles, balance, riskPct, onAlert, onChange, ctx }:
           })}
           {upcoming.length === 0 && <p className="text-[10px] text-slate-500">لا أخبار قادمة في الجدول — اضغط «تحديث الجدول» أو أضف خبراً يدوياً.</p>}
 
-          <button onClick={() => setManual((v) => !v)} className="w-full rounded-sm border border-dashed border-[#2a3a5f] py-1 text-[9px] text-slate-500 transition hover:text-slate-300">
+          <button onClick={() => setManual((v) => !v)} className="w-full rounded-sm border border-dashed border-[#3a3a44] py-1 text-[9px] text-slate-500 transition hover:text-slate-300">
             {manual ? '▲ إخفاء الإضافة اليدوية (احتياط)' : '▼ إضافة خبر يدوي (احتياط)'}
           </button>
           {manual && (
-            <div className="rounded-sm border border-dashed border-[#2a3a5f] p-2">
+            <div className="rounded-sm border border-dashed border-[#3a3a44] p-2">
               <input
                 placeholder="عنوان الخبر…"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                className="mb-1 w-full rounded-sm border border-[#1a2540] bg-[#0c1220] px-2 py-1 text-[10px] text-white outline-none focus:border-red-400/50"
+                className="mb-1 w-full rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-2 py-1 text-[10px] text-white outline-none focus:border-red-400/50"
               />
               <div className="mb-1 flex gap-1">
-                <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="w-1/2 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 font-mono text-[9.5px] text-white outline-none" dir="ltr" />
-                <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className="w-1/2 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 font-mono text-[9.5px] text-white outline-none" dir="ltr" />
+                <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="w-1/2 rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-1 py-1 font-mono text-[9.5px] text-white outline-none" dir="ltr" />
+                <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className="w-1/2 rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-1 py-1 font-mono text-[9.5px] text-white outline-none" dir="ltr" />
               </div>
               <div className="mb-1 flex gap-1">
-                <select value={form.impact} onChange={(e) => setForm((f) => ({ ...f, impact: e.target.value as NewsEvent['impact'] }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none">
+                <select value={form.impact} onChange={(e) => setForm((f) => ({ ...f, impact: e.target.value as NewsEvent['impact'] }))} className="flex-1 rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-1 py-1 text-[9.5px] text-white outline-none">
                   <option value="high">عالي التأثير</option>
                   <option value="medium">متوسط</option>
                   <option value="low">منخفض</option>
                 </select>
-                <input placeholder="توقعات" value={form.forecast} onChange={(e) => setForm((f) => ({ ...f, forecast: e.target.value }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none" />
-                <input placeholder="سابق" value={form.previous} onChange={(e) => setForm((f) => ({ ...f, previous: e.target.value }))} className="flex-1 rounded-sm border border-[#1a2540] bg-[#0c1220] px-1 py-1 text-[9.5px] text-white outline-none" />
+                <input placeholder="توقعات" value={form.forecast} onChange={(e) => setForm((f) => ({ ...f, forecast: e.target.value }))} className="flex-1 rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-1 py-1 text-[9.5px] text-white outline-none" />
+                <input placeholder="سابق" value={form.previous} onChange={(e) => setForm((f) => ({ ...f, previous: e.target.value }))} className="flex-1 rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-1 py-1 text-[9.5px] text-white outline-none" />
               </div>
               <button onClick={() => addEvent()} className="w-full rounded-sm bg-red-400/15 py-1 text-[10px] font-bold text-red-300 transition hover:bg-red-400/25">+ إضافة</button>
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {NEWS_PRESETS.map((p, i) => (
-                  <button key={i} title={`أضف «${p.title}» في التاريخ المختار أعلاه`} onClick={() => addEvent(p)} className="rounded-sm border border-[#2a3a5f] px-1.5 py-0.5 text-[8.5px] text-slate-400 transition hover:border-red-400/40 hover:text-red-300">
+                  <button key={i} title={`أضف «${p.title}» في التاريخ المختار أعلاه`} onClick={() => addEvent(p)} className="rounded-sm border border-[#3a3a44] px-1.5 py-0.5 text-[8.5px] text-slate-400 transition hover:border-red-400/40 hover:text-red-300">
                     {p.title}
                   </button>
                 ))}
@@ -367,18 +367,18 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
   };
 
   return (
-    <div className="rounded-sm border border-cyan-400/25 bg-[#0c1220] p-2">
+    <div className="rounded-sm border border-cyan-400/25 bg-[#1a1a1e] p-2">
       <button onClick={() => setOpen((v) => !v)} className="mb-1.5 flex w-full items-center gap-1.5 text-right">
         <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300">خبير الحيتان — تدفق رأس المال والبنوك</h3>
-        <div className="h-px flex-1 bg-[#1a2540]" />
+        <div className="h-px flex-1 bg-[#2c2c33]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض'}</span>
       </button>
       {open && (
         <div className="space-y-1.5">
           {whales.length === 0 && <p className="text-[10px] text-slate-500">لا بصمات حيتان مرصودة في آخر 24 ساعة — السوق هادئ أو الحجم غير متاح من وسيطك.</p>}
           {whales.slice(-4).reverse().map((w, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-sm border border-[#1a2540] bg-[#080c16] px-2 py-1.5 text-[10px]">
+            <div key={i} className="flex items-center gap-2 rounded-sm border border-[#2c2c33] bg-[#131316] px-2 py-1.5 text-[10px]">
               <span className={`font-black ${w.side === 'شراء عدواني' ? 'text-emerald-300' : 'text-red-300'}`}>{w.side === 'شراء عدواني' ? '▲' : '▼'}</span>
               <div className="flex-1">
                 <span className="text-slate-300">بصمة @ {fmt(w.price)}</span>
@@ -388,7 +388,7 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
             </div>
           ))}
 
-          <div className="rounded-sm border border-dashed border-[#2a3a5f] p-2">
+          <div className="rounded-sm border border-dashed border-[#3a3a44] p-2">
             <div className="mb-1 flex items-center justify-between">
               <span className="text-[9px] font-bold text-slate-400">تغذية Databento — صفقات المؤسسات (عقود GC / CME)</span>
               <button onClick={scan} disabled={dbBusy} className="rounded-sm bg-cyan-400/15 px-2 py-0.5 text-[9px] font-bold text-cyan-200 transition hover:bg-cyan-400/25 disabled:opacity-40">
@@ -399,12 +399,12 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
             {dbStats && (
               <div className="mt-1.5 space-y-1">
                 <div className="grid grid-cols-3 gap-1 text-center text-[9.5px]">
-                  <div className="rounded-sm bg-[#080c16] p-1.5"><div className="font-mono font-bold text-white">{dbStats.total.toLocaleString('en-US')}</div><div className="text-slate-500">صفقة</div></div>
-                  <div className="rounded-sm bg-[#080c16] p-1.5"><div className="font-mono font-bold text-emerald-300">{dbStats.buyVol.toLocaleString('en-US')}</div><div className="text-slate-500">حجم شراء عدواني</div></div>
-                  <div className="rounded-sm bg-[#080c16] p-1.5"><div className="font-mono font-bold text-red-300">{dbStats.sellVol.toLocaleString('en-US')}</div><div className="text-slate-500">حجم بيع عدواني</div></div>
+                  <div className="rounded-sm bg-[#131316] p-1.5"><div className="font-mono font-bold text-white">{dbStats.total.toLocaleString('en-US')}</div><div className="text-slate-500">صفقة</div></div>
+                  <div className="rounded-sm bg-[#131316] p-1.5"><div className="font-mono font-bold text-emerald-300">{dbStats.buyVol.toLocaleString('en-US')}</div><div className="text-slate-500">حجم شراء عدواني</div></div>
+                  <div className="rounded-sm bg-[#131316] p-1.5"><div className="font-mono font-bold text-red-300">{dbStats.sellVol.toLocaleString('en-US')}</div><div className="text-slate-500">حجم بيع عدواني</div></div>
                 </div>
                 {dbStats.buyVol + dbStats.sellVol > 0 && (
-                  <div className="flex h-1.5 overflow-hidden rounded-full bg-[#1a2540]">
+                  <div className="flex h-1.5 overflow-hidden rounded-full bg-[#2c2c33]">
                     <div className="bg-emerald-400" style={{ width: `${(dbStats.buyVol / (dbStats.buyVol + dbStats.sellVol)) * 100}%` }} />
                     <div className="bg-red-400" style={{ width: `${(dbStats.sellVol / (dbStats.buyVol + dbStats.sellVol)) * 100}%` }} />
                   </div>
@@ -412,7 +412,7 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
                 <div>
                   <div className="mb-0.5 text-[8.5px] font-bold text-slate-500">أكبر الصفقات (بصمات مؤسسية)</div>
                   {dbStats.bigPrints.map((t, i) => (
-                    <div key={i} className="flex items-center justify-between border-b border-[#101828] py-0.5 font-mono text-[9px]" dir="ltr">
+                    <div key={i} className="flex items-center justify-between border-b border-[#222227] py-0.5 font-mono text-[9px]" dir="ltr">
                       <span className="text-slate-500">{new Date(t.ts * 1000).toISOString().slice(11, 19)}</span>
                       <span className="font-bold text-white">{t.price.toFixed(1)}</span>
                       <span className={t.side === 'A' ? 'text-emerald-300' : 'text-red-300'}>{t.size} عقود {t.side === 'A' ? '▲ شراء' : '▼ بيع'}</span>

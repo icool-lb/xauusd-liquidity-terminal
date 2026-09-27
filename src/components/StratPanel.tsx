@@ -14,11 +14,11 @@ export function StratPanel({ candles, price }: { candles: Candle[]; price: numbe
   const best = results[0];
 
   return (
-    <div className="rounded-sm border border-emerald-400/25 bg-[#0c1220] p-2">
+    <div className="rounded-sm border border-emerald-400/25 bg-[#1a1a1e] p-2">
       <button onClick={() => setOpen((v) => !v)} className="mb-1.5 flex w-full items-center gap-1.5 text-right">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300">مختبر الاستراتيجيات — اختبار ودمج</h3>
-        <div className="h-px flex-1 bg-[#1a2540]" />
+        <div className="h-px flex-1 bg-[#2c2c33]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض'}</span>
       </button>
       {open && (
@@ -37,13 +37,13 @@ export function StratPanel({ candles, price }: { candles: Candle[]; price: numbe
           </div>
 
           {plan && (
-            <div className={`rounded-sm border p-2 ${plan.side === 'flat' ? 'border-[#1a2540] bg-[#080c16]' : plan.confidence >= 55 ? 'border-emerald-400/40 bg-emerald-400/5' : 'border-[#2a3a5f] bg-[#080c16]'}`}>
+            <div className={`rounded-sm border p-2 ${plan.side === 'flat' ? 'border-[#2c2c33] bg-[#131316]' : plan.confidence >= 55 ? 'border-emerald-400/40 bg-emerald-400/5' : 'border-[#3a3a44] bg-[#131316]'}`}>
               <div className="mb-0.5 flex items-center gap-1.5">
                 <span className={`text-[11px] font-black ${plan.side === 'long' ? 'text-emerald-300' : plan.side === 'short' ? 'text-red-300' : 'text-slate-400'}`}>
                   {plan.side === 'long' ? '▲ صفقة دمج: شراء' : plan.side === 'short' ? '▼ صفقة دمج: بيع' : '◆ بانتظار تفاقم الاستراتيجيات'}
                 </span>
                 {plan.side !== 'flat' && (
-                  <span className="rounded-sm bg-[#1a2540] px-1.5 py-0.5 font-mono text-[8.5px] font-bold text-cyan-300" dir="ltr">
+                  <span className="rounded-sm bg-[#2c2c33] px-1.5 py-0.5 font-mono text-[8.5px] font-bold text-cyan-300" dir="ltr">
                     ثقة {plan.confidence}%
                   </span>
                 )}
@@ -70,7 +70,7 @@ export function StratPanel({ candles, price }: { candles: Candle[]; price: numbe
           {/* جدول الترتيب */}
           <div>
             <div className="mb-0.5 text-[9px] font-bold text-slate-400">ترتيب الاستراتيجيات على نفس القواعد (وقف 15$ / هدف 10$)</div>
-            <div className="overflow-hidden rounded-sm border border-[#1a2540]">
+            <div className="overflow-hidden rounded-sm border border-[#2c2c33]">
               {results.map((r, i) => (
                 <StratRow key={r.name} r={r} rank={i + 1} />
               ))}
@@ -78,19 +78,19 @@ export function StratPanel({ candles, price }: { candles: Candle[]; price: numbe
           </div>
 
           {/* ربط TradingView الخارجي */}
-          <button onClick={() => setShowTv((v) => !v)} className="w-full rounded-sm border border-dashed border-[#2a3a5f] py-1 text-[9px] text-slate-500 transition hover:text-slate-300">
+          <button onClick={() => setShowTv((v) => !v)} className="w-full rounded-sm border border-dashed border-[#3a3a44] py-1 text-[9px] text-slate-500 transition hover:text-slate-300">
             {showTv ? '▲ إخفاء ربط TradingView الخارجي (تنبيهات 24/7)' : '▼ ربط TradingView الخارجي — تنبيهات لهاتفك حتى والتطبيق مغلق'}
           </button>
           {showTv && (
-            <div className="rounded-sm border border-dashed border-[#2a3a5f] p-2 text-[9px] leading-relaxed text-slate-400">
+            <div className="rounded-sm border border-dashed border-[#3a3a44] p-2 text-[9px] leading-relaxed text-slate-400">
               <p className="text-slate-300">حسابك المدفوع يتيح Webhook Alerts تُطلق من خوادم TradingView على مدار الساعة:</p>
               <ol className="mr-3 mt-1 list-decimal space-y-0.5">
                 <li>أنشئ بوتاً في Telegram عبر <b dir="ltr">@BotFather</b> وخذ التوكن، وأرسل رسالة للبوت ثم افتح <b dir="ltr">api.telegram.org/botTOKEN/getUpdates</b> لمعرفة <b>chat_id</b>.</li>
                 <li>في Vercel ← Settings ← Environment Variables أضف: <b dir="ltr">TELEGRAM_BOT_TOKEN</b> و <b dir="ltr">TELEGRAM_CHAT_ID</b> و <b dir="ltr">TV_HOOK_KEY</b> (كلمة سر اخترها أنت).</li>
                 <li>في TradingView أنشئ تنبيهاً ← تبويب الإشعارات ← Webhook URL:
-                  <code dir="ltr" className="mt-0.5 block rounded-sm bg-[#080c16] p-1 font-mono text-[8px] text-cyan-300">https://xauusd-liquidity-terminal.vercel.app/api/tv-hook?key=TV_HOOK_KEY</code>
+                  <code dir="ltr" className="mt-0.5 block rounded-sm bg-[#131316] p-1 font-mono text-[8px] text-cyan-300">https://xauusd-liquidity-terminal.vercel.app/api/tv-hook?key=TV_HOOK_KEY</code>
                 </li>
-                <li>رسالة التنبيه (مثال): <code dir="ltr" className="block rounded-sm bg-[#080c16] p-1 font-mono text-[8px] text-cyan-300">{'{"side":"buy","price":{{close}},"note":"اختراق قمة آسيا"}'}</code></li>
+                <li>رسالة التنبيه (مثال): <code dir="ltr" className="block rounded-sm bg-[#131316] p-1 font-mono text-[8px] text-cyan-300">{'{"side":"buy","price":{{close}},"note":"اختراق قمة آسيا"}'}</code></li>
               </ol>
               <p className="mt-1 text-amber-300/80">ستصلك رسالة Telegram فوراً مهما كان هاتفك — لأن التنبيه يُطلق من خوادم TradingView لا من متصفحك.</p>
             </div>
@@ -104,12 +104,12 @@ export function StratPanel({ candles, price }: { candles: Candle[]; price: numbe
 function StratRow({ r, rank }: { r: StrategyResult; rank: number }) {
   const pnlColor = r.netPnl >= 0 ? 'text-emerald-300' : 'text-red-300';
   return (
-    <div className={`flex items-center gap-2 border-b border-[#101828] px-2 py-1.5 text-[9.5px] last:border-0 ${rank === 1 ? 'bg-amber-400/5' : ''}`}>
+    <div className={`flex items-center gap-2 border-b border-[#222227] px-2 py-1.5 text-[9.5px] last:border-0 ${rank === 1 ? 'bg-amber-400/5' : ''}`}>
       <span className={`w-4 font-mono font-black ${rank === 1 ? 'text-amber-300' : 'text-slate-600'}`}>{rank}</span>
       <div className="flex-1">
         <div className="flex items-center gap-1.5">
           <span className="font-bold text-white">{r.name}</span>
-          <span className="rounded-sm bg-[#1a2540] px-1 text-[8px] text-slate-500">{r.family}</span>
+          <span className="rounded-sm bg-[#2c2c33] px-1 text-[8px] text-slate-500">{r.family}</span>
           {r.current !== 'flat' && (
             <span className={`font-black ${r.current === 'long' ? 'text-emerald-300' : 'text-red-300'}`}>{r.current === 'long' ? '▲' : '▼'}</span>
           )}

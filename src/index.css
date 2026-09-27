@@ -77,7 +77,7 @@
 /* ===== خطوط المنصة والطبقة الجمالية ===== */
 body {
   font-family: 'IBM Plex Sans Arabic', 'JetBrains Mono', system-ui, sans-serif;
-  background: #050810;
+  background: #0a0a0c;
 }
 .font-mono, code {
   font-family: 'JetBrains Mono', monospace !important;
@@ -100,8 +100,8 @@ body {
 
 /* شريط تمرير رفيع */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #080c16; }
-::-webkit-scrollbar-thumb { background: #1a2540; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #2a3a5f; }
+::-webkit-scrollbar-track { background: #131316; }
+::-webkit-scrollbar-thumb { background: #2c2c33; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a44; }
 
 * { border-radius: 2px; }

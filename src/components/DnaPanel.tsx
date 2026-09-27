@@ -33,11 +33,11 @@ export function DnaPanel({ tfs, wave }: { tfs: TfAnalysis[]; wave: Wave | null }
   const w = wave;
 
   return (
-    <div className="rounded-sm border border-violet-400/25 bg-[#0c1220] p-2">
+    <div className="rounded-sm border border-violet-400/25 bg-[#1a1a1e] p-2">
       <button onClick={() => setOpen((v) => !v)} className="mb-1.5 flex w-full items-center gap-1.5 text-right">
         <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-300">خبير بصمة الشموع — Candle DNA & الموجة</h3>
-        <div className="h-px flex-1 bg-[#1a2540]" />
+        <div className="h-px flex-1 bg-[#2c2c33]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض'}</span>
       </button>
       {open && (
@@ -50,8 +50,8 @@ export function DnaPanel({ tfs, wave }: { tfs: TfAnalysis[]; wave: Wave | null }
                 onClick={() => setSel(i)}
                 className="flex shrink-0 flex-col items-center gap-0.5 rounded-sm border px-1.5 py-1 transition"
                 style={{
-                  borderColor: sel === i ? dirColor(t.dir) : '#1a2540',
-                  background: sel === i ? dirColor(t.dir) + '14' : '#080c16',
+                  borderColor: sel === i ? dirColor(t.dir) : '#2c2c33',
+                  background: sel === i ? dirColor(t.dir) + '14' : '#131316',
                 }}
               >
                 <span className="text-[8.5px] font-bold text-slate-300">{t.tf}</span>
@@ -63,7 +63,7 @@ export function DnaPanel({ tfs, wave }: { tfs: TfAnalysis[]; wave: Wave | null }
 
           {/* بصمة الشمعة المختارة */}
           {selTf && (
-            <div className="rounded-sm border border-[#1a2540] bg-[#080c16] p-2">
+            <div className="rounded-sm border border-[#2c2c33] bg-[#131316] p-2">
               <div className="flex items-center gap-2">
                 <span style={{ color: dirColor(selTf.dir) }}><MiniCandle d={selTf.closed} color={dirColor(selTf.dir)} /></span>
                 <div className="flex-1">
@@ -75,22 +75,22 @@ export function DnaPanel({ tfs, wave }: { tfs: TfAnalysis[]; wave: Wave | null }
                 </div>
               </div>
               <div className="mt-1 grid grid-cols-4 gap-1 text-center font-mono text-[8.5px]" dir="ltr">
-                <div className="rounded-sm bg-[#0c1220] p-1"><div className="font-bold text-white">{selTf.closed.bodyPct}%</div><div className="text-slate-500">جسم</div></div>
-                <div className="rounded-sm bg-[#0c1220] p-1"><div className="font-bold text-white">{selTf.closed.upperPct}/{selTf.closed.lowerPct}%</div><div className="text-slate-500">فتيل ع/س</div></div>
-                <div className="rounded-sm bg-[#0c1220] p-1"><div className="font-bold text-white">{selTf.closed.volX ? selTf.closed.volX.toFixed(1) : '—'}×</div><div className="text-slate-500">حجم</div></div>
-                <div className="rounded-sm bg-[#0c1220] p-1"><div className="font-bold text-white">{selTf.atr}$</div><div className="text-slate-500">ATR</div></div>
+                <div className="rounded-sm bg-[#1a1a1e] p-1"><div className="font-bold text-white">{selTf.closed.bodyPct}%</div><div className="text-slate-500">جسم</div></div>
+                <div className="rounded-sm bg-[#1a1a1e] p-1"><div className="font-bold text-white">{selTf.closed.upperPct}/{selTf.closed.lowerPct}%</div><div className="text-slate-500">فتيل ع/س</div></div>
+                <div className="rounded-sm bg-[#1a1a1e] p-1"><div className="font-bold text-white">{selTf.closed.volX ? selTf.closed.volX.toFixed(1) : '—'}×</div><div className="text-slate-500">حجم</div></div>
+                <div className="rounded-sm bg-[#1a1a1e] p-1"><div className="font-bold text-white">{selTf.atr}$</div><div className="text-slate-500">ATR</div></div>
               </div>
             </div>
           )}
 
           {/* الموجة */}
           {w && (
-            <div className="rounded-sm border border-[#1a2540] bg-[#080c16] p-2">
+            <div className="rounded-sm border border-[#2c2c33] bg-[#131316] p-2">
               <div className="mb-1 flex items-center gap-2">
                 <span className={`text-[13px] font-black ${w.dir === 'up' ? 'text-emerald-300' : w.dir === 'down' ? 'text-red-300' : 'text-slate-400'}`}>
                   {w.dir === 'up' ? '▲ موجة صاعدة' : w.dir === 'down' ? '▼ موجة هابطة' : '◆ لا موجة'}
                 </span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#1a2540]">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#2c2c33]">
                   <div
                     className="h-full rounded-full transition-all"
                     style={{ width: `${w.strength}%`, background: w.dir === 'down' ? '#f87171' : '#34d399' }}
@@ -119,7 +119,7 @@ export function DnaPanel({ tfs, wave }: { tfs: TfAnalysis[]; wave: Wave | null }
               {/* آفاق زمنية */}
               <div className="mt-1.5 grid grid-cols-4 gap-1">
                 {w.horizons.map((h) => (
-                  <div key={h.label} className="rounded-sm bg-[#0c1220] p-1 text-center">
+                  <div key={h.label} className="rounded-sm bg-[#1a1a1e] p-1 text-center">
                     <div className="text-[8.5px] font-bold text-slate-400">{h.label}</div>
                     <div className="font-mono text-[8.5px] font-bold text-white" dir="ltr">{fmt(h.mid)}</div>
                     <div className="font-mono text-[7.5px] text-slate-600" dir="ltr">{fmt(h.low)} – {fmt(h.high)}</div>

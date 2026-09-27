@@ -141,11 +141,11 @@ export function TimingPanel({ a, wave, ladder, dbConfirm, news, account, riskPct
           : '🔴 ليس الآن — المؤسسات لا تدخل في هذه الظروف';
 
   return (
-    <div className="rounded-sm border border-emerald-400/25 bg-[#0c1220] p-2">
+    <div className="rounded-sm border border-emerald-400/25 bg-[#1a1a1e] p-2">
       <button onClick={() => setOpen((v) => !v)} className="mb-1.5 flex w-full items-center gap-1.5 text-right">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300">خبير التوقيت المؤسسي — متى يشتري البنوك</h3>
-        <div className="h-px flex-1 bg-[#1a2540]" />
+        <div className="h-px flex-1 bg-[#2c2c33]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض'}</span>
       </button>
       {open && (
@@ -153,7 +153,7 @@ export function TimingPanel({ a, wave, ladder, dbConfirm, news, account, riskPct
           {/* الحكم */}
           <div className={`rounded-sm border px-2 py-1.5 text-[10px] font-bold leading-relaxed ${tierStyle}`}>{tierText}</div>
           <div className="flex items-center gap-2">
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#1a2540]">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#2c2c33]">
               <div
                 className="h-full rounded-full transition-all"
                 style={{ width: `${Math.min(100, calc.score)}%`, background: calc.tier === 'green' ? '#34d399' : calc.tier === 'amber' ? '#fbbf24' : '#f87171' }}
@@ -177,16 +177,16 @@ export function TimingPanel({ a, wave, ladder, dbConfirm, news, account, riskPct
 
           {/* خطة التنفيذ */}
           {calc.plan && (
-            <div className="rounded-sm border border-[#1a2540] bg-[#080c16] p-2 text-[10px]">
+            <div className="rounded-sm border border-[#2c2c33] bg-[#131316] p-2 text-[10px]">
               <div className="mb-1 flex items-center gap-1.5">
                 <span className={`font-black ${calc.plan.side === 'long' ? 'text-emerald-300' : 'text-red-300'}`}>{calc.plan.side === 'long' ? '▲ شراء' : '▼ بيع'}</span>
                 <span className="text-slate-500">— خطّة أوستن:</span>
               </div>
               <div className="grid grid-cols-4 gap-1 text-center font-mono" dir="ltr">
-                <div className="rounded-sm bg-[#0c1220] p-1"><div className="font-bold text-white">{fmt(calc.plan.entry)}</div><div className="text-[7.5px] text-slate-500">دخول</div></div>
-                <div className="rounded-sm bg-[#0c1220] p-1"><div className="font-bold text-red-300">{fmt(calc.plan.sl)}</div><div className="text-[7.5px] text-slate-500">وقف</div></div>
-                <div className="rounded-sm bg-[#0c1220] p-1"><div className="font-bold text-emerald-300">{fmt(calc.plan.tp)}</div><div className="text-[7.5px] text-slate-500">هدف</div></div>
-                <div className="rounded-sm bg-[#0c1220] p-1"><div className="font-bold text-amber-300">{calc.plan.lot.toFixed(2)}</div><div className="text-[7.5px] text-slate-500">لوت</div></div>
+                <div className="rounded-sm bg-[#1a1a1e] p-1"><div className="font-bold text-white">{fmt(calc.plan.entry)}</div><div className="text-[7.5px] text-slate-500">دخول</div></div>
+                <div className="rounded-sm bg-[#1a1a1e] p-1"><div className="font-bold text-red-300">{fmt(calc.plan.sl)}</div><div className="text-[7.5px] text-slate-500">وقف</div></div>
+                <div className="rounded-sm bg-[#1a1a1e] p-1"><div className="font-bold text-emerald-300">{fmt(calc.plan.tp)}</div><div className="text-[7.5px] text-slate-500">هدف</div></div>
+                <div className="rounded-sm bg-[#1a1a1e] p-1"><div className="font-bold text-amber-300">{calc.plan.lot.toFixed(2)}</div><div className="text-[7.5px] text-slate-500">لوت</div></div>
               </div>
             </div>
           )}
@@ -200,7 +200,7 @@ export function TimingPanel({ a, wave, ladder, dbConfirm, news, account, riskPct
           </div>
 
           {/* منهج البنوك */}
-          <p className="rounded-sm bg-[#080c16] p-1.5 text-[8.5px] leading-relaxed text-slate-600">
+          <p className="rounded-sm bg-[#131316] p-1.5 text-[8.5px] leading-relaxed text-slate-600">
             منهج أوستن من دراسة تصرفات البنوك وصناديق التحوط: ① لا دخول إلا بعد كسر سيولة وهمية وانعكاس (Sweep + MSS)
             ② التنفيذ داخل كيلزوني لندن ونيويورك حيث ينفذ رأس المال الكبير ③ تجنّب ±20 دقيقة حول الأخبار العالية ثم التغذي على سيولتها
             ④ تدفق Databento يسبق الحركة — لا دخول عكسه ⑤ لا دخول في منتصف النطاق — فقط عند المناطق غير الممسوحة.

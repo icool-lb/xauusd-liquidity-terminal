@@ -8,7 +8,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <div className="mb-2 flex items-center gap-2">
       <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
       <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{children}</h3>
-      <div className="h-px flex-1 bg-[#1a2540]" />
+      <div className="h-px flex-1 bg-[#2c2c33]" />
     </div>
   );
 }
@@ -39,7 +39,7 @@ export function LevelsPanel({ a }: { a: DayAnalysis }) {
           <div
             key={i}
             className={`flex items-center justify-between border border-transparent px-2 py-1.5 text-xs ${
-              lv.kind === 'OPEN' ? 'bg-cyan-400/5' : 'hover:bg-[#111a2b]'
+              lv.kind === 'OPEN' ? 'bg-cyan-400/5' : 'hover:bg-[#232329]'
             }`}
           >
             <div className="flex items-center gap-1.5">
@@ -75,7 +75,7 @@ export function SignalCard({ s, bias }: { s: Signal | null; bias: DayAnalysis['b
     return (
       <div>
         <SectionTitle>إشارة اليوم</SectionTitle>
-        <div className="rounded-md border border-dashed border-[#2a3a5f] p-4 text-center">
+        <div className="rounded-md border border-dashed border-[#3a3a44] p-4 text-center">
           <div className={`mb-1 text-xs font-bold ${biasColor}`}>الاتجاه: {biasText}</div>
           <p className="text-[11px] leading-relaxed text-slate-500">
             لا توجد إشارة مكتملة بعد. القاعدة: لا دخول بدون <span className="text-amber-300">سحب سيولة واضح</span> ثم كسر هيكلي.
@@ -96,7 +96,7 @@ export function SignalCard({ s, bias }: { s: Signal | null; bias: DayAnalysis['b
   return (
     <div>
       <SectionTitle>إشارة اليوم</SectionTitle>
-      <div className={`rounded-md border-r-[3px] bg-[#0c1220] p-3 ${isLong ? 'border-emerald-400' : 'border-red-400'}`}>
+      <div className={`rounded-md border-r-[3px] bg-[#1a1a1e] p-3 ${isLong ? 'border-emerald-400' : 'border-red-400'}`}>
         <div className="mb-2 flex items-center justify-between">
           <span className={`text-sm font-black ${isLong ? 'text-emerald-300' : 'text-red-300'}`}>
             {isLong ? 'صفقة شراء' : 'صفقة بيع'}
@@ -104,16 +104,16 @@ export function SignalCard({ s, bias }: { s: Signal | null; bias: DayAnalysis['b
           <span className={`rounded-sm px-2 py-0.5 text-[10px] font-bold ${statusMap.c}`}>{statusMap.t}</span>
         </div>
         <div dir="ltr" className="grid grid-cols-2 gap-1.5 font-mono text-[11px]">
-          <div className="rounded-sm bg-[#111a2b] p-1.5 text-center"><div className="text-[9px] text-slate-500">ENTRY</div><div className="text-white">{fmt(s.entry)}</div></div>
-          <div className="rounded-sm bg-[#111a2b] p-1.5 text-center"><div className="text-[9px] text-slate-500">STOP</div><div className="text-red-300">{fmt(s.stop)}</div></div>
-          <div className="rounded-sm bg-[#111a2b] p-1.5 text-center"><div className="text-[9px] text-slate-500">TP1</div><div className="text-emerald-300">{fmt(s.tp1)}</div></div>
-          <div className="rounded-sm bg-[#111a2b] p-1.5 text-center"><div className="text-[9px] text-slate-500">TP2</div><div className="text-emerald-300">{fmt(s.tp2)}</div></div>
+          <div className="rounded-sm bg-[#232329] p-1.5 text-center"><div className="text-[9px] text-slate-500">ENTRY</div><div className="text-white">{fmt(s.entry)}</div></div>
+          <div className="rounded-sm bg-[#232329] p-1.5 text-center"><div className="text-[9px] text-slate-500">STOP</div><div className="text-red-300">{fmt(s.stop)}</div></div>
+          <div className="rounded-sm bg-[#232329] p-1.5 text-center"><div className="text-[9px] text-slate-500">TP1</div><div className="text-emerald-300">{fmt(s.tp1)}</div></div>
+          <div className="rounded-sm bg-[#232329] p-1.5 text-center"><div className="text-[9px] text-slate-500">TP2</div><div className="text-emerald-300">{fmt(s.tp2)}</div></div>
         </div>
         <div className="mt-2 flex items-center justify-between text-[11px]">
           <span className="text-slate-400">العائد/المخاطرة</span>
           <span dir="ltr" className="font-mono font-bold text-amber-300">1 : {s.rr}</span>
         </div>
-        <ul className="mt-2 space-y-1 border-t border-[#1a2540] pt-2">
+        <ul className="mt-2 space-y-1 border-t border-[#2c2c33] pt-2">
           {s.reason.map((r, i) => (
             <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-relaxed text-slate-400">
               <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-cyan-400" />{r}
@@ -135,8 +135,8 @@ export function RiskCalc({ s, account, riskPct }: { s: Signal | null; account: n
     <div>
       <SectionTitle>حاسبة حجم الصفقة</SectionTitle>
       <div className="grid grid-cols-3 gap-1.5 text-center text-[11px]">
-        <div className="rounded-sm bg-[#0c1220] p-2"><div className="text-[9px] text-slate-500">المخاطرة $</div><div dir="ltr" className="font-mono font-bold text-white">{riskUsd.toFixed(0)}</div></div>
-        <div className="rounded-sm bg-[#0c1220] p-2"><div className="text-[9px] text-slate-500">مسافة الوقف</div><div dir="ltr" className="font-mono font-bold text-white">{s ? stopDist.toFixed(1) + '$' : '—'}</div></div>
+        <div className="rounded-sm bg-[#1a1a1e] p-2"><div className="text-[9px] text-slate-500">المخاطرة $</div><div dir="ltr" className="font-mono font-bold text-white">{riskUsd.toFixed(0)}</div></div>
+        <div className="rounded-sm bg-[#1a1a1e] p-2"><div className="text-[9px] text-slate-500">مسافة الوقف</div><div dir="ltr" className="font-mono font-bold text-white">{s ? stopDist.toFixed(1) + '$' : '—'}</div></div>
         <div className="rounded-sm bg-amber-400/10 p-2"><div className="text-[9px] text-amber-300/70">الحجم (لوت)</div><div dir="ltr" className="font-mono font-black text-amber-300">{s ? lots.toFixed(2) : '—'}</div></div>
       </div>
     </div>
@@ -157,7 +157,7 @@ export function StatsPanel({ st }: { st: BacktestStats }) {
       <SectionTitle>أداء الاستراتيجية (محاكاة)</SectionTitle>
       <div className="grid grid-cols-5 gap-1">
         {items.map((it, i) => (
-          <div key={i} className="rounded-sm bg-[#0c1220] p-2 text-center">
+          <div key={i} className="rounded-sm bg-[#1a1a1e] p-2 text-center">
             <div className="text-[8.5px] text-slate-500">{it.l}</div>
             <div dir="ltr" className={`font-mono text-[12px] font-bold ${it.hot === undefined ? 'text-slate-200' : it.hot ? 'text-emerald-300' : 'text-red-300'}`}>{it.v}</div>
           </div>
@@ -223,7 +223,7 @@ export function SessionPlan() {
       <ol className="space-y-1.5">
         {steps.map((s, i) => (
           <li key={i} className="flex items-start gap-2 text-[11px] leading-relaxed text-slate-400">
-            <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-[#2a3a5f] font-mono text-[9px] text-amber-300">
+            <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-[#3a3a44] font-mono text-[9px] text-amber-300">
               {i + 1}
             </span>
             {s}
@@ -263,7 +263,7 @@ export function ConnectionPanel({
   return (
     <div>
       <SectionTitle>الاتصال بالبيانات الحقيقية — MetaApi</SectionTitle>
-      <div className="space-y-2 rounded-md border border-[#1a2540] bg-[#0c1220] p-2.5">
+      <div className="space-y-2 rounded-md border border-[#2c2c33] bg-[#1a1a1e] p-2.5">
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-slate-500">حساب MT4/MT5 عبر MetaApi</span>
           <span className={`rounded-sm px-1.5 py-0.5 text-[9px] font-bold ${statusBadge.c}`}>{statusBadge.t}</span>
@@ -273,7 +273,7 @@ export function ConnectionPanel({
           <input
             type="password" value={token} onChange={(e) => setToken(e.target.value)}
             placeholder="من app.metaapi.cloud/token"
-            className="mt-0.5 w-full rounded-sm border border-[#1a2540] bg-[#080c16] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
+            className="mt-0.5 w-full rounded-sm border border-[#2c2c33] bg-[#131316] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
             dir="ltr"
           />
         </label>
@@ -282,7 +282,7 @@ export function ConnectionPanel({
           <input
             type="text" value={accountId} onChange={(e) => setAccountId(e.target.value)}
             placeholder="مثال: 865d3a4d-3803-486d-…"
-            className="mt-0.5 w-full rounded-sm border border-[#1a2540] bg-[#080c16] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
+            className="mt-0.5 w-full rounded-sm border border-[#2c2c33] bg-[#131316] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
             dir="ltr"
           />
         </label>
@@ -291,7 +291,7 @@ export function ConnectionPanel({
           <input
             type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)}
             placeholder="XAUUSD / XAUUSD. / GOLD"
-            className="mt-0.5 w-full rounded-sm border border-[#1a2540] bg-[#080c16] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
+            className="mt-0.5 w-full rounded-sm border border-[#2c2c33] bg-[#131316] px-2 py-1 font-mono text-[10px] text-white outline-none focus:border-amber-400/50"
             dir="ltr"
           />
         </label>
@@ -304,7 +304,7 @@ export function ConnectionPanel({
           </button>
           <button
             onClick={onTest}
-            className="rounded-sm border border-[#2a3a5f] px-2.5 py-1.5 text-[11px] font-bold text-slate-300 transition hover:bg-[#111a2b] active:scale-95"
+            className="rounded-sm border border-[#3a3a44] px-2.5 py-1.5 text-[11px] font-bold text-slate-300 transition hover:bg-[#232329] active:scale-95"
           >
             اختبار
           </button>
@@ -335,9 +335,9 @@ export function EquityCurve({ st }: { st: import('../lib/engine').BacktestFull }
   return (
     <div>
       <SectionTitle>منحنى الأداء التراكمي (R)</SectionTitle>
-      <div className="rounded-md border border-[#1a2540] bg-[#0c1220] p-2" dir="ltr">
+      <div className="rounded-md border border-[#2c2c33] bg-[#1a1a1e] p-2" dir="ltr">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
-          <line x1={0} x2={W} y1={py(0)} y2={py(0)} stroke="#2a3a5f" strokeDasharray="3 3" strokeWidth="0.5" />
+          <line x1={0} x2={W} y1={py(0)} y2={py(0)} stroke="#3a3a44" strokeDasharray="3 3" strokeWidth="0.5" />
           <polyline points={`${px(0)},${py(0)} ${pts}`} fill="none" stroke={pos ? '#34d399' : '#f87171'} strokeWidth="1.5" />
           <text x={W - 4} y={py(rs[rs.length - 1]) - 3} textAnchor="end" fill={pos ? '#34d399' : '#f87171'} fontSize="9" fontFamily="JetBrains Mono">
             {st.totalR > 0 ? '+' : ''}{st.totalR}R
@@ -345,11 +345,11 @@ export function EquityCurve({ st }: { st: import('../lib/engine').BacktestFull }
         </svg>
       </div>
       <div className="mt-1.5 grid grid-cols-2 gap-1 text-center text-[10px]">
-        <div className="rounded-sm bg-[#0c1220] p-1.5">
+        <div className="rounded-sm bg-[#1a1a1e] p-1.5">
           <div className="text-[8.5px] text-slate-500">التوقع لكل صفقة</div>
           <div dir="ltr" className={`font-mono font-bold ${st.expectancyR >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{st.expectancyR}R</div>
         </div>
-        <div className="rounded-sm bg-[#0c1220] p-1.5">
+        <div className="rounded-sm bg-[#1a1a1e] p-1.5">
           <div className="text-[8.5px] text-slate-500">أقصى تراجع</div>
           <div dir="ltr" className="font-mono font-bold text-red-300">-{st.maxDrawdownR}R</div>
         </div>
@@ -370,7 +370,7 @@ export function LevelStats({ st }: { st: import('../lib/engine').BacktestFull })
           return (
             <div key={i} className="flex items-center gap-2 text-[10.5px]">
               <span className="w-28 truncate text-slate-400">{l.label}</span>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#111a2b]">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#232329]">
                 <div className={`h-full ${wr >= 50 ? 'bg-emerald-400' : 'bg-red-400'}`} style={{ width: `${wr}%` }} />
               </div>
               <span dir="ltr" className="w-16 text-left font-mono text-[9.5px] text-slate-500">{l.wins}/{l.signals} · {wr}%</span>
@@ -395,7 +395,7 @@ export function SessionTimeline() {
   ];
   return (
     <div className="relative h-8 select-none" dir="ltr">
-      <div className="absolute inset-x-0 top-3 h-3 overflow-hidden rounded-sm bg-[#0c1220]">
+      <div className="absolute inset-x-0 top-3 h-3 overflow-hidden rounded-sm bg-[#1a1a1e]">
         {segs.map((s, i) => (
           <div key={i} className="absolute top-0 h-full" style={{ left: `${(s.from / 24) * 100}%`, width: `${((s.to - s.from) / 24) * 100}%`, background: s.c }} />
         ))}
@@ -557,13 +557,13 @@ export function CrewPanel({ a, st, lastCandleTime, extra, wave }: { a: DayAnalys
       <button onClick={() => setOpen((v) => !v)} className="mb-2 flex w-full items-center gap-2 text-right">
         <span className={`h-1.5 w-1.5 rounded-full ${kz ? 'animate-pulse bg-red-400' : 'bg-amber-400'}`} />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">طاقم الخبراء — مراقبة لحظية</h3>
-        <div className="h-px flex-1 bg-[#1a2540]" />
+        <div className="h-px flex-1 bg-[#2c2c33]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض (13)'}</span>
       </button>
       {open && (
         <div className="space-y-1.5">
           {EXPERT_META.map((e, i) => (
-            <div key={i} className="rounded-sm border border-[#1a2540] bg-[#0c1220] p-2">
+            <div key={i} className="rounded-sm border border-[#2c2c33] bg-[#1a1a1e] p-2">
               <div className="mb-1 flex items-center gap-1.5">
                 <span className="flex h-5 w-5 items-center justify-center rounded-sm text-[10px] font-black" style={{ background: e.color + '22', color: e.color }}>
                   {e.name[0]}
@@ -581,7 +581,7 @@ export function CrewPanel({ a, st, lastCandleTime, extra, wave }: { a: DayAnalys
             </div>
           ))}
           {feed.length > 0 && (
-            <div className="rounded-sm border border-[#1a2540] bg-[#080c16] p-2">
+            <div className="rounded-sm border border-[#2c2c33] bg-[#131316] p-2">
               <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.15em] text-slate-500">آخر أحداث الطاقم</div>
               {feed.slice(0, 4).map((f, i) => (
                 <div key={i} className="flex items-start gap-1.5 py-0.5 text-[10px] text-slate-400">

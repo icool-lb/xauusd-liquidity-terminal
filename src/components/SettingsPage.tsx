@@ -15,7 +15,7 @@ const LS_TGCHAT = 'xau_tg_chat';
 const lsGet = (k: string) => { try { return localStorage.getItem(k) ?? ''; } catch { return ''; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* تجاهل */ } };
 
-const inputCls = 'mt-0.5 w-full rounded-sm border border-[#1a2540] bg-[#080c16] px-2 py-1.5 font-mono text-[10.5px] text-white outline-none focus:border-amber-400/50';
+const inputCls = 'mt-0.5 w-full rounded-sm border border-[#2c2c33] bg-[#131316] px-2 py-1.5 font-mono text-[10.5px] text-white outline-none focus:border-amber-400/50';
 
 export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus }: {
   creds: MetaApiCreds | null;
@@ -54,7 +54,7 @@ export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus 
       <ConnectionPanel creds={creds} status={status} error={error} onSave={onSave} onTest={onTest} />
 
       {/* ٢) مفتاح Databento */}
-      <div className="rounded-md border border-[#1a2540] bg-[#0c1220] p-3">
+      <div className="rounded-md border border-[#2c2c33] bg-[#1a1a1e] p-3">
         <div className="mb-2 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
           <h3 className="text-[11px] font-bold text-cyan-300">مفتاح Databento — تدفق المؤسسات (عقود GC / CME)</h3>
@@ -81,7 +81,7 @@ export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus 
       </div>
 
       {/* ٣) ربط TradingView ← Telegram */}
-      <div className="rounded-md border border-[#1a2540] bg-[#0c1220] p-3">
+      <div className="rounded-md border border-[#2c2c33] bg-[#1a1a1e] p-3">
         <div className="mb-2 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
           <h3 className="text-[11px] font-bold text-amber-300">تنبيهات TradingView على هاتفك — Webhook + Telegram</h3>
@@ -102,14 +102,14 @@ export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus 
           <b>خطوة إلزامية على خادم Vercel:</b> هذه القيم الثلاث يقرأها الخادم من متغيرات البيئة لا من المتصفح —
           افتح Vercel ← مشروعك ← Settings ← Environment Variables وأضف <b dir="ltr">TV_HOOK_KEY</b> و<b dir="ltr">TELEGRAM_BOT_TOKEN</b> و<b dir="ltr">TELEGRAM_CHAT_ID</b> بنفس القيم، ثم أعد النشر.
           بعدها أنشئ تنبيهاً في TradingView (خطة مدفوعة) بنفس مفتاح الربط في الرابط:
-          <code dir="ltr" className="mt-1 block rounded-sm bg-[#080c16] p-1.5 font-mono text-[9px] text-cyan-300">
+          <code dir="ltr" className="mt-1 block rounded-sm bg-[#131316] p-1.5 font-mono text-[9px] text-cyan-300">
             https://اسم-مشروعك.vercel.app/api/tv-hook?key={tv || 'مفتاحك'}
           </code>
         </div>
       </div>
 
       {/* ٤) الخصوصية */}
-      <div className="rounded-md border border-[#1a2540] bg-[#0c1220] p-3">
+      <div className="rounded-md border border-[#2c2c33] bg-[#1a1a1e] p-3">
         <div className="mb-1.5 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           <h3 className="text-[11px] font-bold text-emerald-300">الخصوصية</h3>

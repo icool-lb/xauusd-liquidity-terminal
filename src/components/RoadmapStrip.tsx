@@ -29,7 +29,7 @@ export function RoadmapStrip({ price, roadmap, archive, hasDbKey, dbConfirm }: {
 }) {
   const up = roadmap?.dir === 'up';
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-amber-400/25 bg-gradient-to-l from-amber-400/10 via-[#0a0f1c] to-[#0a0f1c] px-4 py-1.5 text-[10.5px]">
+    <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-amber-400/25 bg-gradient-to-l from-amber-400/10 via-[#141417] to-[#141417] px-4 py-1.5 text-[10.5px]">
       <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.2em] text-amber-300/80">خارطة الطريق</span>
       <span className="shrink-0 text-slate-400">
         السعر الآن <b dir="ltr" className="font-mono text-[12px] text-white">{price ? fmt(price) : '—'}</b>
@@ -68,7 +68,7 @@ export function RoadmapStrip({ price, roadmap, archive, hasDbKey, dbConfirm }: {
       {/* تأكيد Databento لرأس المال المؤسسي */}
       <span className="mr-auto flex shrink-0 items-center gap-1.5">
         {!hasDbKey ? (
-          <span className="rounded-sm border border-[#2a3a5f] px-2 py-0.5 text-[9px] text-slate-500">🔌 أدخل مفتاح Databento في لوحة الحيتان لتأكيد التوجه لحظياً</span>
+          <span className="rounded-sm border border-[#3a3a44] px-2 py-0.5 text-[9px] text-slate-500">🔌 أدخل مفتاح Databento في لوحة الحيتان لتأكيد التوجه لحظياً</span>
         ) : dbConfirm === null ? (
           <span className="animate-pulse rounded-sm border border-amber-400/30 px-2 py-0.5 text-[9px] text-amber-300">⏳ جارٍ فحص تدفق GC من CME…</span>
         ) : dbConfirm.ok === true ? (

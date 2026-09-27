@@ -63,11 +63,11 @@ export function BtExpertPanel({ candles }: { candles: Candle[] }) {
   const doneToday = journal[0]?.date === todayKey();
 
   return (
-    <div className="rounded-sm border border-cyan-400/25 bg-[#0c1220] p-2">
+    <div className="rounded-sm border border-cyan-400/25 bg-[#1a1a1e] p-2">
       <button onClick={() => setOpen((v) => !v)} className="mb-1.5 flex w-full items-center gap-1.5 text-right">
         <span className={`h-1.5 w-1.5 rounded-full ${busy ? 'animate-pulse bg-amber-400' : doneToday ? 'bg-emerald-400' : 'bg-cyan-400'}`} />
         <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300">خبير الباك-تيست — الفحص اليومي</h3>
-        <div className="h-px flex-1 bg-[#1a2540]" />
+        <div className="h-px flex-1 bg-[#2c2c33]" />
         <span className="text-[10px] text-slate-600">{open ? '▲ طي' : '▼ عرض'}</span>
       </button>
       {open && (
@@ -100,9 +100,9 @@ export function BtExpertPanel({ candles }: { candles: Candle[] }) {
               {/* أفضل التركيبات */}
               <div>
                 <div className="mb-0.5 text-[9px] font-bold text-slate-400">أفضل التركيبات المختبرة (بنفس بياناتك)</div>
-                <div className="overflow-hidden rounded-sm border border-[#1a2540]">
+                <div className="overflow-hidden rounded-sm border border-[#2c2c33]">
                   {suite.top.map((r, i) => (
-                    <div key={r.cfg.id} className={`flex items-center gap-2 border-b border-[#101828] px-2 py-1.5 text-[9.5px] last:border-0 ${i === 0 ? 'bg-amber-400/5' : ''}`}>
+                    <div key={r.cfg.id} className={`flex items-center gap-2 border-b border-[#222227] px-2 py-1.5 text-[9.5px] last:border-0 ${i === 0 ? 'bg-amber-400/5' : ''}`}>
                       <span className={`w-4 font-mono font-black ${i === 0 ? 'text-amber-300' : 'text-slate-600'}`}>{i + 1}</span>
                       <span className="flex-1 font-bold text-white">{r.cfg.label}</span>
                       <span className="font-mono text-[8.5px] text-slate-500" dir="ltr">{r.trades}t · {r.winRate}%</span>
@@ -119,7 +119,7 @@ export function BtExpertPanel({ candles }: { candles: Candle[] }) {
                 <div>
                   <div className="mb-0.5 text-[9px] font-bold text-slate-400">تعديلات مقاسة (قبول/رفض)</div>
                   {suite.recommendations.map((r, i) => (
-                    <div key={i} className="mb-1 flex items-start gap-1.5 rounded-sm bg-[#080c16] px-2 py-1.5 text-[9.5px]">
+                    <div key={i} className="mb-1 flex items-start gap-1.5 rounded-sm bg-[#131316] px-2 py-1.5 text-[9.5px]">
                       <span className={r.positive ? 'text-emerald-300' : 'text-red-300'}>{r.positive ? '✅' : '⛔'}</span>
                       <div>
                         <span className="font-bold text-slate-200">{r.text}</span>
@@ -136,9 +136,9 @@ export function BtExpertPanel({ candles }: { candles: Candle[] }) {
           {journal.length > 0 && (
             <div>
               <div className="mb-0.5 text-[9px] font-bold text-slate-400">سجل الاختبارات اليومية</div>
-              <div className="max-h-28 overflow-y-auto rounded-sm border border-[#1a2540]">
+              <div className="max-h-28 overflow-y-auto rounded-sm border border-[#2c2c33]">
                 {journal.slice(0, 7).map((e) => (
-                  <div key={e.date} className="border-b border-[#101828] px-2 py-1 text-[9px] last:border-0">
+                  <div key={e.date} className="border-b border-[#222227] px-2 py-1 text-[9px] last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-slate-300" dir="ltr">{e.date}</span>
                       <span className="font-mono text-slate-600" dir="ltr">أساس {e.baselineExp}R</span>

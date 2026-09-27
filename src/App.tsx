@@ -149,6 +149,18 @@ export default function App() {
     () => (all.length >= 10 ? analyzeDay(all, effDayStart) : null),
     [all, effDayStart]
   );
+  // تحليل الشارت: إن لم يكتمل يوم التحليل بعد (افتتاح الأسبوع 22:00 UTC أو بداية كل يوم)
+  // نرسم هيكل آخر يوم تداول مكتمل حتى لا يبقى الشارت أعمى — يتحول تلقائياً فور اكتمال الشموع
+  const chartAnalysis: DayAnalysis | null = useMemo(() => {
+    if (all.length < 10) return null;
+    const live = analyzeDay(all, effDayStart);
+    if (live) return live;
+    for (let back = 1; back <= 4; back++) {
+      const prev = analyzeDay(all, effDayStart - back * DAY);
+      if (prev) return prev;
+    }
+    return null;
+  }, [all, effDayStart]);
   const stats = useMemo(() => (all.length >= 200 ? backtestFull(all, BT_DAYS) : null), [all]);
   const whales = useMemo(() => detectWhales(all), [all]);
   const conds = useMemo(() => analyzeConditions(labData, archiveMode ? 2000 : 480), [labData, archiveMode]);
@@ -230,7 +242,11 @@ export default function App() {
               : ratio <= 0.44 ? true : ratio >= 0.54 ? false : null
             : null;
         setDbConfirm({ ok, ratio, total: s.total, time: Date.now() });
-      } catch { /* نحتفظ بآخر قيمة ناجحة */ }
+      } catch (e) {
+        // نحتفظ بآخر قيمة ناجحة؛ وإن لم يسبقها نجاح نظهر سبب الفشل بصدق بدل الانتظار الأبدي
+        const msg = e instanceof Error ? e.message : 'تعذر السحب';
+        setDbConfirm((prev) => prev ?? { ok: null, ratio: 0, total: 0, time: Date.now(), err: msg });
+      }
     };
     void tick();
     const id = setInterval(tick, 600_000);
@@ -607,11 +623,12 @@ export default function App() {
                   </div>
                 ) : (
                   <GoldChart
-                    candles={analysis?.candles ?? []}
-                    analysis={analysis}
+                    candles={chartAnalysis?.candles ?? []}
+                    analysis={chartAnalysis}
                     showAll={displayCandles}
                     tfSeconds={tf}
                     layers={layers}
+                    fallback={analysis == null && chartAnalysis != null}
                   />
                 )
               ) : (

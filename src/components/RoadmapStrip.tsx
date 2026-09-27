@@ -16,6 +16,7 @@ export interface DbConfirm {
   ratio: number;       // حصة الشراء العدواني 0..1
   total: number;       // عدد الصفقات المفحوصة
   time: number;        // وقت آخر فحص
+  err?: string;        // سبب فشل السحب (يظهر فقط إذا لم يسبقه نجاح)
 }
 
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -71,6 +72,8 @@ export function RoadmapStrip({ price, roadmap, archive, hasDbKey, dbConfirm }: {
           <span className="rounded-sm border border-[#3a3a44] px-2 py-0.5 text-[9px] text-slate-500">🔌 أدخل مفتاح Databento في لوحة الحيتان لتأكيد التوجه لحظياً</span>
         ) : dbConfirm === null ? (
           <span className="animate-pulse rounded-sm border border-amber-400/30 px-2 py-0.5 text-[9px] text-amber-300">⏳ جارٍ فحص تدفق GC من CME…</span>
+        ) : dbConfirm.err ? (
+          <span className="rounded-sm border border-red-400/30 px-2 py-0.5 text-[9px] text-red-300">⚠️ تدفق Databento: {dbConfirm.err.slice(0, 70)}</span>
         ) : dbConfirm.total === 0 ? (
           <span className="rounded-sm border border-slate-400/30 px-2 py-0.5 text-[9px] text-slate-400">🌙 سوق CME مغلق — يُستأنف فحص التدفق تلقائياً عند الافتتاح</span>
         ) : dbConfirm.ok === true ? (

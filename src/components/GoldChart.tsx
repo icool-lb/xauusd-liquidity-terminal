@@ -28,17 +28,18 @@ interface Props {
   showAll: Candle[];        // شموع العرض (بالفريم المختار)
   tfSeconds: number;
   layers: AutoLayers;
+  fallback?: boolean;       // true = نعرض هيكل آخر يوم تداول لأن يوم اليوم لم يكتمل بعد
 }
 
-export default function GoldChart({ candles, analysis, showAll, tfSeconds, layers }: Props) {
+export default function GoldChart({ candles, analysis, showAll, tfSeconds, layers, fallback = false }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const lastFitKey = useRef<string>('');
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const drawRef = useRef<() => void>(() => {});
-  const stateRef = useRef({ analysis, layers, tfSeconds });
-  stateRef.current = { analysis, layers, tfSeconds };
+  const stateRef = useRef({ analysis, layers, tfSeconds, fallback });
+  stateRef.current = { analysis, layers, tfSeconds, fallback };
   const [full, setFull] = useState(false);
 
   // ---------- إنشاء الشارت ----------
@@ -99,7 +100,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
     drawRef.current = () => {
       const chart = chartRef.current, series = seriesRef.current, cv = canvasRef.current;
       if (!chart || !series || !cv) return;
-      const { analysis: an, layers: ly, tfSeconds: tf } = stateRef.current;
+      const { analysis: an, layers: ly, tfSeconds: tf, fallback: fb } = stateRef.current;
       const ctx = cv.getContext('2d');
       if (!ctx) return;
       const dpr = window.devicePixelRatio || 1;
@@ -275,6 +276,14 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
             ctx.beginPath(); ctx.moveTo(xn, 0); ctx.lineTo(xn, H); ctx.stroke();
             ctx.setLineDash([]);
           }
+        }
+
+        if (fb) {
+          ctx.fillStyle = '#fbbf24cc';
+          ctx.font = 'bold 10px JetBrains Mono';
+          ctx.textAlign = 'center';
+          ctx.fillText('📅 يُعرض هيكل آخر جلسة تداول — تُبنى مستويات اليوم الجديد تلقائياً فور اكتمال شموعه', W / 2, 26);
+          ctx.textAlign = 'left';
         }
       }
     };

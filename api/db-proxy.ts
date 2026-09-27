@@ -1,7 +1,7 @@
 // وسيط Databento الخادمي — يتجاوز حظر CORS من المتصفح
 // المتصفح يتصل بـ /api/db-proxy (نفس موقع المنصة) وهذه الدالة تتصل بـ hist.databento.com
 // المفتاح يمر في الترويسة x-db-key ولا يُحفظ على الخادم إطلاقاً
-const ALLOWED = ['datasets.list', 'timeseries.get'];
+const ALLOWED = ['metadata.list_datasets', 'timeseries.get_range'];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {

@@ -17,6 +17,21 @@ function isLocalDev(): boolean {
   try { return ['localhost', '127.0.0.1'].includes(location.hostname); } catch { return true; }
 }
 
+// رسائل خطأ Databento تأتي بصيغتين: detail نصية أو كائن {case, message, status_code}
+function dbErrMsg(raw: string): string {
+  try {
+    const j = JSON.parse(raw) as { detail?: unknown; error?: unknown };
+    const d = j.detail;
+    if (typeof d === 'string') return d;
+    if (d && typeof d === 'object') {
+      const m = (d as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+    if (typeof j.error === 'string') return j.error;
+  } catch { /* نص خام */ }
+  return '';
+}
+
 async function dbFetch(path: string, key: string): Promise<Response> {
   // Databento يستخدم HTTP Basic: api_key كاسم مستخدم وكلمة مرور فارغة
   const auth = 'Basic ' + btoa(key + ':');
@@ -35,9 +50,9 @@ async function dbFetch(path: string, key: string): Promise<Response> {
       throw new Error('وسيط Databento غير موجود في هذه النسخة — أنت إما على رابط «معاينة» (الوسيط لا يعمل فيه) أو النسخة قديمة: افتح المنصة من رابط Vercel الرسمي ثم اضغط Ctrl+Shift+R');
     }
     // نقرأ رسالة الخادم/ Databento إن وُجدت (401 مفتاح مرفوض، 402 رصيد…)
-    let msg = '';
-    try { msg = String((await r.json() as { error?: string })?.error ?? ''); } catch { /* رد HTML */ }
-    if (r.status === 401 || r.status === 403) throw new Error('المفتاح مرفوض من Databento — تحقق من نسخه كاملاً من لوحة Databento');
+    const rawErr = await r.text().catch(() => '');
+    const msg = dbErrMsg(rawErr);
+    if (r.status === 401 || r.status === 403) throw new Error('المفتاح مرفوض من Databento — تحقق من نسخه كاملاً من لوحة Databento' + (msg ? ` (${msg})` : ''));
     if (r.status === 402) throw new Error('رصيد Databento غير كافٍ لهذا السحب');
     throw new Error(msg || `رد الخادم: ${r.status}`);
   }
@@ -47,13 +62,11 @@ async function dbFetch(path: string, key: string): Promise<Response> {
 // تحقق من المفتاح وقائمة مجموعات البيانات المتاحة
 export async function checkDbKey(key: string): Promise<{ ok: boolean; msg: string }> {
   try {
-    const r = await dbFetch('/datasets.list', key);
+    const r = await dbFetch('/metadata.list_datasets', key);
     if (r.status === 401 || r.status === 403) return { ok: false, msg: 'المفتاح مرفوض من Databento — انسخه كاملاً من لوحة Databento وحاول مجدداً' };
     if (!r.ok) {
       const body = await r.text().catch(() => '');
-      let detail = '';
-      try { detail = String((JSON.parse(body) as { detail?: string; error?: string })?.detail ?? (JSON.parse(body) as { error?: string })?.error ?? ''); } catch { /* نص خام */ }
-      return { ok: false, msg: detail || body.slice(0, 120) || `رد Databento: ${r.status}` };
+      return { ok: false, msg: dbErrMsg(body) || body.slice(0, 120) || `رد Databento: ${r.status}` };
     }
     const txt = await r.text();
     const hasGlbx = txt.includes('GLBX');
@@ -71,28 +84,28 @@ export interface DbTrade {
   action: string;  // 'T' ضربة / 'F' ملء
 }
 
-// سحب صفقات عقود الذهب GC من CME Globex عبر timeseries.get (ترميز json)
+// سحب صفقات عقود الذهب GC من CME Globex عبر timeseries.get_range (ترميز json)
+// GC.v.0 = العقد المستمر الأمامي بالحجم (stype_in=continuous) — الصيغة المعتمدة في Databento
 export async function fetchGcTrades(key: string, hoursBack = 3): Promise<DbTrade[]> {
   const end = new Date();
   const start = new Date(end.getTime() - hoursBack * 3600_000);
   const p = new URLSearchParams({
     dataset: 'GLBX.MDP3',
     schema: 'trades',
-    symbols: 'GC',
+    symbols: 'GC.v.0',
+    stype_in: 'continuous',
     start: start.toISOString(),
     end: end.toISOString(),
     encoding: 'json',
   });
-  const r = await dbFetch('/timeseries.get?' + p.toString(), key);
+  const r = await dbFetch('/timeseries.get_range?' + p.toString(), key);
   if (r.status === 401 || r.status === 403) throw new Error('المفتاح مرفوض من Databento — تحقق منه في لوحة Databento');
   if (r.status === 402) throw new Error('رصيد Databento غير كافٍ لسحب هذه البيانات');
   const raw = await r.text();
   if (!r.ok) {
     // نافذة بلا صفقات (السوق مغلق مثلاً) — ليست خطأً
     if (/no data|no records|nothing found|not found/i.test(raw)) return [];
-    let detail = '';
-    try { detail = String((JSON.parse(raw) as { detail?: string; error?: string })?.detail ?? (JSON.parse(raw) as { error?: string })?.error ?? ''); } catch { /* نص خام */ }
-    throw new Error(detail || raw.slice(0, 120) || `خطأ من Databento (${r.status})`);
+    throw new Error(dbErrMsg(raw) || raw.slice(0, 120) || `خطأ من Databento (${r.status})`);
   }
   const txt = raw;
   const out: DbTrade[] = [];

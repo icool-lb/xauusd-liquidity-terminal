@@ -24,9 +24,22 @@ async function dbFetch(path: string, key: string): Promise<Response> {
     // عبر وسيط المنصة الخادمي (يتجنب حظر CORS من المتصفح) — المفتاح في الترويسة فقط
     const [p, query] = path.split('?');
     const url = '/api/db-proxy?path=' + encodeURIComponent(p.replace(/^\//, '')) + (query ? '&' + query : '');
-    const r = await fetch(url, { headers: { 'x-db-key': key } });
+    let r: Response;
+    try {
+      r = await fetch(url, { headers: { 'x-db-key': key } });
+    } catch {
+      throw new Error('لا يوجد اتصال بوسيط المنصة — تحقق من الشبكة وأنك تفتح المنصة من رابط Vercel الرسمي');
+    }
     if (r.ok) return r;
-    // إن لم يكن الوسيط متاحاً (بيئة بلا api/) جرّب المباشر كملاذ أخير
+    if (r.status === 404) {
+      throw new Error('وسيط Databento غير موجود في هذه النسخة — أنت إما على رابط «معاينة» (الوسيط لا يعمل فيه) أو النسخة قديمة: افتح المنصة من رابط Vercel الرسمي ثم اضغط Ctrl+Shift+R');
+    }
+    // نقرأ رسالة الخادم/ Databento إن وُجدت (401 مفتاح مرفوض، 402 رصيد…)
+    let msg = '';
+    try { msg = String((await r.json() as { error?: string })?.error ?? ''); } catch { /* رد HTML */ }
+    if (r.status === 401 || r.status === 403) throw new Error('المفتاح مرفوض من Databento — تحقق من نسخه كاملاً من لوحة Databento');
+    if (r.status === 402) throw new Error('رصيد Databento غير كافٍ لهذا السحب');
+    throw new Error(msg || `رد الخادم: ${r.status}`);
   }
   return fetch(HIST + path, { headers: { Authorization: auth } });
 }
@@ -41,7 +54,7 @@ export async function checkDbKey(key: string): Promise<{ ok: boolean; msg: strin
     const hasGlbx = txt.includes('GLBX');
     return { ok: true, msg: hasGlbx ? 'المفتاح يعمل — مجموعة GLBX (CME) متاحة' : 'المفتاح يعمل' };
   } catch (e) {
-    return { ok: false, msg: 'تعذر الوصول لخوادم Databento حتى عبر وسيط المنصة — تحقق من الشبكة وأعد المحاولة' };
+    return { ok: false, msg: e instanceof Error ? e.message : 'خطأ غير معروف' };
   }
 }
 

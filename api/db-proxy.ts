@@ -31,10 +31,13 @@ export default async function handler(req: any, res: any) {
       signal: AbortSignal.timeout(30_000),
     });
     const text = await upstream.text();
+    // تشخيص يظهر في صفحة Logs بلوحة Vercel (بدون تسجيل المفتاح أبداً)
+    console.log(`[db-proxy] path=${path} key=${key.slice(0, 4)}… upstream=${upstream.status} body=${text.slice(0, 160).replace(/\n/g, ' ')}`);
     res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.status(upstream.status).send(text);
   } catch (e) {
-    res.status(502).json({ ok: false, error: 'تعذر الوصول لخوادم Databento: ' + String(e) });
+    console.log(`[db-proxy] path=${path} key=${key.slice(0, 4)}… NETWORK-FAIL: ${String(e)}`);
+    res.status(502).json({ ok: false, error: 'تعذر الوصول لخوادم Databento من الخادم: ' + String(e) });
   }
 }

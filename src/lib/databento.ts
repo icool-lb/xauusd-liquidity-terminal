@@ -48,8 +48,13 @@ async function dbFetch(path: string, key: string): Promise<Response> {
 export async function checkDbKey(key: string): Promise<{ ok: boolean; msg: string }> {
   try {
     const r = await dbFetch('/datasets.list', key);
-    if (r.status === 401 || r.status === 403) return { ok: false, msg: 'المفتاح مرفوض — تحقق منه في لوحة Databento' };
-    if (!r.ok) return { ok: false, msg: `خطأ من الخادم (${r.status})` };
+    if (r.status === 401 || r.status === 403) return { ok: false, msg: 'المفتاح مرفوض من Databento — انسخه كاملاً من لوحة Databento وحاول مجدداً' };
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      let detail = '';
+      try { detail = String((JSON.parse(body) as { detail?: string; error?: string })?.detail ?? (JSON.parse(body) as { error?: string })?.error ?? ''); } catch { /* نص خام */ }
+      return { ok: false, msg: detail || body.slice(0, 120) || `رد Databento: ${r.status}` };
+    }
     const txt = await r.text();
     const hasGlbx = txt.includes('GLBX');
     return { ok: true, msg: hasGlbx ? 'المفتاح يعمل — مجموعة GLBX (CME) متاحة' : 'المفتاح يعمل' };
@@ -79,10 +84,17 @@ export async function fetchGcTrades(key: string, hoursBack = 3): Promise<DbTrade
     encoding: 'json',
   });
   const r = await dbFetch('/timeseries.get?' + p.toString(), key);
-  if (r.status === 401 || r.status === 403) throw new Error('المفتاح مرفوض');
+  if (r.status === 401 || r.status === 403) throw new Error('المفتاح مرفوض من Databento — تحقق منه في لوحة Databento');
   if (r.status === 402) throw new Error('رصيد Databento غير كافٍ لسحب هذه البيانات');
-  if (!r.ok) throw new Error(`خطأ من Databento (${r.status})`);
-  const txt = await r.text();
+  const raw = await r.text();
+  if (!r.ok) {
+    // نافذة بلا صفقات (السوق مغلق مثلاً) — ليست خطأً
+    if (/no data|no records|nothing found|not found/i.test(raw)) return [];
+    let detail = '';
+    try { detail = String((JSON.parse(raw) as { detail?: string; error?: string })?.detail ?? (JSON.parse(raw) as { error?: string })?.error ?? ''); } catch { /* نص خام */ }
+    throw new Error(detail || raw.slice(0, 120) || `خطأ من Databento (${r.status})`);
+  }
+  const txt = raw;
   const out: DbTrade[] = [];
   for (const line of txt.split('\n')) {
     const t = line.trim();

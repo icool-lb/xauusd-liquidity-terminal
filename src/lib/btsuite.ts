@@ -157,9 +157,9 @@ export function runBtSuite(all: Candle[]): BtSuiteResult | null {
     if (r.cfg.id === '0') return;
     const dR = Math.round((r.expectancyR - baseline.expectancyR) * 100) / 100;
     if (r.expectancyR > baseline.expectancyR + 0.05 && r.trades >= 8) {
-      recs.push({ text: r.cfg.label, impact: `التوقع ${baseline.expectancyR}R ← ${r.expectancyR}R (${dR > 0 ? '+' : ''}${dR}) على ${r.trades} صفقة`, positive: true });
+      recs.push({ text: r.cfg.label, impact: `التوقع ${baseline.expectancyR.toFixed(2)}R ← ${r.expectancyR.toFixed(2)}R (${dR > 0 ? '+' : ''}${dR}) على ${r.trades} صفقة`, positive: true });
     } else if (r.expectancyR < baseline.expectancyR - 0.15) {
-      recs.push({ text: `تجنّب: ${r.cfg.label}`, impact: `يخفض التوقع إلى ${r.expectancyR}R`, positive: false });
+      recs.push({ text: `تجنّب: ${r.cfg.label}`, impact: `يخفض التوقع إلى ${r.expectancyR.toFixed(2)}R`, positive: false });
     }
   };
   results.forEach(pushRec);
@@ -168,8 +168,8 @@ export function runBtSuite(all: Candle[]): BtSuiteResult | null {
   const verdict = recs.length && recs[0].positive
     ? `توصية اليوم: ${recs[0].text} — ${recs[0].impact}`
     : baseline.expectancyR > 0
-      ? `الإعداد الحالي سليم (${baseline.expectancyR}R توقع) — لا تعديل اليوم`
-      : `الإعداد الحالي خاسر تاريخياً (${baseline.expectancyR}R) — ${best.cfg.id !== '0' ? `جرّب: ${best.cfg.label} (${best.expectancyR}R)` : 'قلل التداول اليوم'}`;
+      ? `الإعداد الحالي سليم (${baseline.expectancyR.toFixed(2)}R توقع) — لا تعديل اليوم`
+      : `الإعداد الحالي خاسر تاريخياً (${baseline.expectancyR.toFixed(2)}R) — ${best.cfg.id !== '0' ? `جرّب: ${best.cfg.label} (${best.expectancyR.toFixed(2)}R)` : 'قلل التداول اليوم'}`;
 
   return {
     ranAt: Date.now(),

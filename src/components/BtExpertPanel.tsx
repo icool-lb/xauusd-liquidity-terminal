@@ -91,9 +91,9 @@ export function BtExpertPanel({ candles }: { candles: Candle[] }) {
                 <p className="mt-0.5 text-[11px] font-black leading-relaxed text-white">{suite.verdict}</p>
                 <div className="mt-1 flex flex-wrap gap-2 font-mono text-[9px] text-slate-400" dir="ltr">
                   <span>أساس: {suite.baseline.trades} صفقة</span>
-                  <span>Win {suite.baseline.winRate}%</span>
-                  <span>{suite.baseline.expectancyR}R</span>
-                  <span>{suite.baseline.netPnl >= 0 ? '+' : ''}{suite.baseline.netPnl}$/0.01</span>
+                  <span>نجاح {suite.baseline.winRate}%</span>
+                  <span>توقع {suite.baseline.expectancyR.toFixed(2)}R</span>
+                  <span>صافي {suite.baseline.netPnl >= 0 ? '+' : ''}{suite.baseline.netPnl}$ بلوت 0.01</span>
                 </div>
               </div>
 
@@ -107,7 +107,7 @@ export function BtExpertPanel({ candles }: { candles: Candle[] }) {
                       <span className="flex-1 font-bold text-white">{r.cfg.label}</span>
                       <span className="font-mono text-[8.5px] text-slate-500" dir="ltr">{r.trades}t · {r.winRate}%</span>
                       <span className={`font-mono font-bold ${r.expectancyR >= 0 ? 'text-emerald-300' : 'text-red-300'}`} dir="ltr">
-                        {r.expectancyR}R {r.netPnl >= 0 ? '+' : ''}{r.netPnl}$
+                        {r.expectancyR.toFixed(2)}R {r.netPnl >= 0 ? '+' : ''}{r.netPnl}$
                       </span>
                     </div>
                   ))}

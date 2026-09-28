@@ -471,7 +471,7 @@ export function CrewPanel({ a, st, lastCandleTime, extra, wave }: { a: DayAnalys
       : asiaW > 16 ? `نطاق آسيا واسع (${asiaW.toFixed(1)}$) — السيولة بعيدة، انتظر السحب أولاً`
       : `نطاق آسيا طبيعي (${asiaW.toFixed(1)}$)`,
     extra?.btToday
-      ? `فحص اليوم تم ✓ — أساس ${extra.btToday.baselineExp}R — الأفضل «${extra.btToday.topLabel}» (${extra.btToday.topExp}R)${st ? ` — مرجع 25ي: ${st.winRate}%` : ''}`
+      ? `فحص اليوم تم ✓ — أساس ${extra.btToday.baselineExp.toFixed(2)}R — الأفضل «${extra.btToday.topLabel}» (${extra.btToday.topExp.toFixed(2)}R)${st ? ` — مرجع 25ي: ${st.winRate}%` : ''}`
       : st ? `مرجع سريع: ${st.winRate}% نجاح على ${st.total} إشارة — ${st.expectancyR > 0 ? 'الاستراتيجية موجبة التوقع' : 'حذر: التوقع سالب'} — والفحص اليومي لم يبدأ بعد` : 'لا نتائج باك-تيست كافية بعد — الفحص اليومي يبدأ تلقائياً مع أول اتصال',
     a ? `${a.sweeps.length} سحب سيولة اليوم — ${unswept.length} مستويات لم تُسحب بعد` : 'لا تحليل بعد',
     minsAgo === null ? 'غير متصل بمصدر البيانات'
@@ -512,7 +512,7 @@ export function CrewPanel({ a, st, lastCandleTime, extra, wave }: { a: DayAnalys
     wave ? `${wave.dir === 'flat' ? '◆ لا موجة الآن' : wave.dir === 'up' ? `▲ موجة صاعدة ${wave.strength}%` : `▼ موجة هابطة ${wave.strength}%`} — ${wave.path[0] ? `التالي: ${fmt(wave.path[0].price)} (${wave.path[0].label})` : 'أجمع بصمات الأطر…'}` : 'بانتظار سلالم الأطر الصغرى (دقيقة/5 دقائق)…',
     // ساندي كوهين — مختبر الاستراتيجيات
     extra?.stratBest
-      ? `الأفضل الآن: «${extra.stratBest.name}» — ربح ${extra.stratBest.winRate}% على ${extra.stratBest.trades} صفقة (+${extra.stratBest.netPnl}$/0.01) — ${extra.stratLive ? `الدمج يقول: ${extra.stratLive}` : 'لا إشارة دمج مفتوحة'}`
+      ? `الأفضل الآن: «${extra.stratBest.name}» — نجاح ${extra.stratBest.winRate}% على ${extra.stratBest.trades} صفقة (صافي ${extra.stratBest.netPnl >= 0 ? '+' : ''}${extra.stratBest.netPnl}$ بلوت 0.01) — ${extra.stratLive ? `الدمج يقول: ${extra.stratLive}` : 'لا إشارة دمج مفتوحة'}`
       : 'المختبر يحتاج بيانات متصلة لاختبار الاستراتيجيات الثماني…',
   ];
 

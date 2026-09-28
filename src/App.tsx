@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import GoldChart from './components/GoldChart';
-import { LevelsPanel, SignalCard, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
+import { LevelsPanel, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
 import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
 import { DnaPanel } from './components/DnaPanel';
 import { StratPanel } from './components/StratPanel';
@@ -8,6 +8,7 @@ import { BtExpertPanel } from './components/BtExpertPanel';
 import { SettingsPage } from './components/SettingsPage';
 import { TimingPanel } from './components/TimingPanel';
 import { RoadmapStrip, type RoadmapInfo, type DbConfirm } from './components/RoadmapStrip';
+import { SignalCard } from './components/SignalCard';
 import { loadDbKey, fetchGcTrades, analyzeWhales } from './lib/databento';
 import { loadBtJournal } from './lib/btsuite';
 import { runStrategyLab, mergedPlan } from './lib/strategies';
@@ -350,7 +351,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V27</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V28</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#2c2c33]" />
@@ -416,6 +417,9 @@ export default function App() {
           dbConfirm={dbConfirm}
         />
       )}
+
+      {/* ===== بطاقة صفقة اليوم: الاتجاه + الأرقام + السبب + النتيجة ===== */}
+      {liveStatus === 'ok' && <SignalCard analysis={analysis} price={dayOffset === 0 ? lastPrice : (analysis?.lastPrice ?? lastPrice)} />}
 
       {/* ===== شريط المستويات ===== */}
       {analysis && (
@@ -646,9 +650,8 @@ export default function App() {
           </div>
         </main>
 
-        {/* العمود الأيسر: الإشارة */}
+        {/* العمود الأيسر: حاسبة المخاطرة وخبير التوقيت */}
         <aside className="order-3 w-full shrink-0 space-y-5 border-t border-[#2c2c33] bg-[#131316] p-3 lg:w-72 lg:border-r lg:border-t-0 lg:overflow-y-auto">
-          <SignalCard s={dayOffset === 0 ? sig : analysis?.signals[0] ?? null} bias={analysis?.bias ?? 'neutral'} />
           <RiskCalc s={sig} account={account} riskPct={riskPct} />
           <TimingPanel
             a={analysis}

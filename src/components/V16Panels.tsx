@@ -331,7 +331,7 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
     const w = whales[whales.length - 1];
     if (w && w.time > lastWhale.current) {
       if (lastWhale.current !== 0) {
-        onAlert(`🐋 جيك ليفيت (خبير الحيتان): بصمة ${w.side} @ ${fmt(w.price)} — مدى ${w.range.toFixed(1)}$ (${w.rangeX.toFixed(1)}×) وحجم ${w.volX.toFixed(1)}×`);
+        onAlert(`🐋 جيك ليفيت (خبير الحيتان): بصمة ${w.side} @ ${fmt(w.price)} — مدى ${w.range.toFixed(1)}$ (${w.rangeX.toFixed(1)}×)${w.volX > 0 ? ` وحجم ${w.volX.toFixed(1)}×` : ''}`);
       }
       lastWhale.current = w.time;
     }
@@ -382,7 +382,7 @@ export function WhalePanel({ whales, onAlert, onStatus }: { whales: WhalePrint[]
               <span className={`font-black ${w.side === 'شراء عدواني' ? 'text-emerald-300' : 'text-red-300'}`}>{w.side === 'شراء عدواني' ? '▲' : '▼'}</span>
               <div className="flex-1">
                 <span className="text-slate-300">بصمة @ {fmt(w.price)}</span>
-                <span className="mr-2 text-slate-500">مدى {w.range.toFixed(1)}$ ({w.rangeX.toFixed(1)}×) · حجم {w.volX.toFixed(1)}×</span>
+                <span className="mr-2 text-slate-500">مدى {w.range.toFixed(1)}$ ({w.rangeX.toFixed(1)}×){w.volX > 0 ? ` · حجم ${w.volX.toFixed(1)}×` : ' · الحجم غير متاح من الوسيط'}</span>
               </div>
               <span dir="ltr" className="font-mono text-[9px] text-slate-600">{utcHM(w.time)}</span>
             </div>

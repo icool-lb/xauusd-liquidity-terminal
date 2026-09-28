@@ -27,12 +27,12 @@ export function StratPanel({ candles, price }: { candles: Candle[]; price: numbe
           <div className="rounded-sm border border-amber-400/30 bg-amber-400/5 p-2">
             <div className="text-[9px] font-bold text-amber-300">🏆 الأعلى ربحية على بياناتك (آخر 30 يوماً)</div>
             <div className="mt-0.5 text-[11px] font-black text-white">{best.name}</div>
-            <div className="mt-0.5 flex flex-wrap gap-2 font-mono text-[9px] text-slate-400" dir="ltr">
-              <span>Win {best.winRate}%</span>
-              <span>PF {best.profitFactor}</span>
-              <span>{best.netPnl >= 0 ? '+' : ''}{best.netPnl}$/0.01</span>
-              <span>{best.tradesPerDay}/day</span>
-              <span>جودة {best.quality}</span>
+            <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 font-mono text-[9px] text-slate-400">
+              <span>نسبة نجاح <b className="text-white">{best.winRate}%</b></span>
+              <span>عامل ربح <b className="text-white">{best.profitFactor}</b></span>
+              <span>صافي <b className="text-emerald-300">{best.netPnl >= 0 ? '+' : ''}{best.netPnl}$</b> بلوت 0.01</span>
+              <span><b className="text-white">{best.tradesPerDay}</b> صفقة/يوم</span>
+              <span>جودة <b className="text-white">{best.quality}/100</b></span>
             </div>
           </div>
 
@@ -114,8 +114,8 @@ function StratRow({ r, rank }: { r: StrategyResult; rank: number }) {
             <span className={`font-black ${r.current === 'long' ? 'text-emerald-300' : 'text-red-300'}`}>{r.current === 'long' ? '▲' : '▼'}</span>
           )}
         </div>
-        <div className="mt-0.5 font-mono text-[8.5px] text-slate-500" dir="ltr">
-          {r.trades} trades · {r.tradesPerDay}/day · خسائر متتالية {r.maxConsecLoss}
+        <div className="mt-0.5 font-mono text-[8.5px] text-slate-500">
+          {r.trades} صفقة · {r.tradesPerDay}/يوم · أسوأ سلسلة خاسرة {r.maxConsecLoss}
         </div>
       </div>
       <div className="text-left font-mono" dir="ltr">

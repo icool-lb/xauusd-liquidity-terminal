@@ -86,22 +86,37 @@ export interface DbTrade {
 
 // سحب صفقات عقود الذهب GC من CME Globex عبر timeseries.get_range (ترميز json)
 // GC.v.0 = العقد المستمر الأمامي بالحجم (stype_in=continuous) — الصيغة المعتمدة في Databento
+// ملاحظة: البيانات التاريخية تتأخر ~15 دقيقة عن اللحظة الراهنة، لذا نطرح هامش أمان
+// وإن أعلنت Databento حدّها المتاح نعيد المحاولة به مرة واحدة
 export async function fetchGcTrades(key: string, hoursBack = 3): Promise<DbTrade[]> {
-  const end = new Date();
-  const start = new Date(end.getTime() - hoursBack * 3600_000);
-  const p = new URLSearchParams({
-    dataset: 'GLBX.MDP3',
-    schema: 'trades',
-    symbols: 'GC.v.0',
-    stype_in: 'continuous',
-    start: start.toISOString(),
-    end: end.toISOString(),
-    encoding: 'json',
-  });
-  const r = await dbFetch('/timeseries.get_range?' + p.toString(), key);
+  const mkParams = (endMs: number) => {
+    const end = new Date(endMs);
+    const start = new Date(endMs - hoursBack * 3600_000);
+    return new URLSearchParams({
+      dataset: 'GLBX.MDP3',
+      schema: 'trades',
+      symbols: 'GC.v.0',
+      stype_in: 'continuous',
+      start: start.toISOString(),
+      end: end.toISOString(),
+      encoding: 'json',
+    }).toString();
+  };
+  let r = await dbFetch('/timeseries.get_range?' + mkParams(Date.now() - 15 * 60_000), key);
   if (r.status === 401 || r.status === 403) throw new Error('المفتاح مرفوض من Databento — تحقق منه في لوحة Databento');
   if (r.status === 402) throw new Error('رصيد Databento غير كافٍ لسحب هذه البيانات');
-  const raw = await r.text();
+  let raw = await r.text();
+  if (!r.ok) {
+    // «end بعد النطاق المتاح» — نستخرج الحد المعلن ونعيد المحاولة به
+    const avail = raw.match(/available up to '([^']+)'/);
+    if (avail) {
+      const t = Date.parse(avail[1].replace(' ', 'T'));
+      if (Number.isFinite(t)) {
+        r = await dbFetch('/timeseries.get_range?' + mkParams(t - 60_000), key);
+        raw = await r.text();
+      }
+    }
+  }
   if (!r.ok) {
     // نافذة بلا صفقات (السوق مغلق مثلاً) — ليست خطأً
     if (/no data|no records|nothing found|not found/i.test(raw)) return [];

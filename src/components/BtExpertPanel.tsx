@@ -29,9 +29,9 @@ export function BtExpertPanel({ candles }: { candles: Candle[] }) {
           setSuite(res);
           const entry: BtJournalEntry = {
             date: todayKey(), ranAt: res.ranAt,
-            baselineExp: res.baseline.expectancyR,
+            baselineExp: +res.baseline.expectancyR.toFixed(2),
             topLabel: res.top[0]?.cfg.label ?? '—',
-            topExp: res.top[0]?.expectancyR ?? 0,
+            topExp: +(res.top[0]?.expectancyR ?? 0).toFixed(2),
             verdict: res.verdict,
           };
           setJournal(appendBtJournal(entry));
@@ -141,9 +141,9 @@ export function BtExpertPanel({ candles }: { candles: Candle[] }) {
                   <div key={e.date} className="border-b border-[#222227] px-2 py-1 text-[9px] last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-slate-300" dir="ltr">{e.date}</span>
-                      <span className="font-mono text-slate-600" dir="ltr">أساس {e.baselineExp}R</span>
+                      <span className="font-mono text-slate-600" dir="ltr">أساس {e.baselineExp.toFixed(2)}R</span>
                       <span className={`mr-auto font-mono font-bold ${e.topExp >= e.baselineExp ? 'text-emerald-300' : 'text-slate-400'}`} dir="ltr">
-                        الأفضل {e.topExp}R
+                        الأفضل {e.topExp.toFixed(2)}R
                       </span>
                     </div>
                     <p className="mt-0.5 text-[8.5px] leading-relaxed text-slate-500">{e.verdict}</p>

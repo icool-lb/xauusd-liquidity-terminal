@@ -67,14 +67,14 @@ export function analyzeNewsCorrelation(candles: Candle[], events: NewsEvent[]): 
     moves.push({ time: c.time, dir, size: +size.toFixed(1), atrX: +(range / atr).toFixed(1), event: null, gapMin: null, bar: i });
   }
 
-  // مطابقة كل حركة بأقرب خبر في نافذة ±25 دقيقة
+  // مطابقة كل حركة بأقرب خبر في نافذة ±40 دقيقة (ردود الفعل المؤسسية قد تتأخر عن الخبر)
   let matched = 0, delaySum = 0, sizeSum = 0;
   for (const m of moves) {
     let best: NewsEvent | null = null;
     let bestGap = Infinity;
     for (const e of evs) {
       const gap = (m.time - e.time) / 60;
-      if (Math.abs(gap) <= 25 && Math.abs(gap) < Math.abs(bestGap)) { best = e; bestGap = gap; }
+      if (Math.abs(gap) <= 40 && Math.abs(gap) < Math.abs(bestGap)) { best = e; bestGap = gap; }
     }
     if (best) {
       m.event = best;

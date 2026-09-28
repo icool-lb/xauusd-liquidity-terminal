@@ -8,6 +8,7 @@ import type { Candle } from './engine';
 export interface StrategyResult {
   name: string;
   family: string;
+  how: string;          // شرح قواعد الاستراتيجية بلغة بسيطة
   trades: number;
   wins: number;
   winRate: number;
@@ -40,10 +41,11 @@ function sma(arr: number[], period: number): number {
 
 // ---------- مكتبة الاستراتيجيات (قواعد TradingView القياسية) ----------
 
-function buildLibrary(): { name: string; family: string; fn: SignalFn; note: (c: Candle[]) => string }[] {
+function buildLibrary(): { name: string; family: string; how: string; fn: SignalFn; note: (c: Candle[]) => string }[] {
   return [
     {
       name: 'RSI عكسي (14)', family: 'أوسيلاتور',
+      how: 'مؤشر RSI يقيس قوة الزخم من 0 إلى 100. القاعدة: إذا هبط تحت 30 (تشبّع بيعي مبالغ فيه) نشتري، وإذا صعد فوق 70 (تشبّع شرائي) نبيع — رهان على ارتداد السعر من التطرف.',
       fn: (c, i) => {
         if (i < 16) return null;
         const g: number[] = [], l: number[] = [];
@@ -60,6 +62,7 @@ function buildLibrary(): { name: string; family: string; fn: SignalFn; note: (c:
     },
     {
       name: 'تقاطع EMA 9/21', family: 'اتجاه',
+      how: 'متوسطان متحركان أسيّان: سريع (9 شموع) وبطيء (21 شمعة). القاعدة: عندما يقطع السريع البطيء صعوداً نشتري، ونزولاً نبيع — رهان على بداية اتجاه جديد.',
       fn: (c, i) => {
         if (i < 22) return null;
         let e9 = c[i - 22].close, e21 = c[i - 22].close;
@@ -77,6 +80,7 @@ function buildLibrary(): { name: string; family: string; fn: SignalFn; note: (c:
     },
     {
       name: 'MACD (12/26/9)', family: 'زخم',
+      how: 'يقيس الفرق بين متوسطين (12 و26) ثم يقارنه بخط إشارة (9). القاعدة: عندما يقطع خط MACD خط الإشارة صعوداً نشتري، ونزولاً نبيع — التقاط تحوّل الزخم مبكراً.',
       fn: (c, i) => {
         if (i < 40) return null;
         const closes = c.slice(0, i + 1).map((x) => x.close);
@@ -101,6 +105,7 @@ function buildLibrary(): { name: string; family: string; fn: SignalFn; note: (c:
     },
     {
       name: 'بولينجر عكسي (20/2)', family: 'تقلب',
+      how: 'نطاق إحصائي حول متوسط 20 شمعة بعرض انحرافين معياريين. القاعدة: إذا خرج السعر تحت النطاق السفلي نشتري (توقع ارتداد للداخل)، وإذا خرج فوق العلوي نبيع — فلسفة «السعر يعود لمتوسطه».',
       fn: (c, i) => {
         if (i < 21) return null;
         const closes = c.slice(i - 20, i).map((x) => x.close);
@@ -114,6 +119,7 @@ function buildLibrary(): { name: string; family: string; fn: SignalFn; note: (c:
     },
     {
       name: 'سوبرترند (10/3)', family: 'اتجاه',
+      how: 'خط يتبع السعر مبني على مدى التذبذب (ATR) بمضاعف 3. القاعدة: عندما يغلق السعر فوق الخط بعد أن كان تحته نشتري، والعكس نبيع — يتداول فقط مع اتجاه مؤكد.',
       fn: (c, i) => {
         if (i < 12) return null;
         const atr = c.slice(i - 10, i).reduce((a, x) => a + (x.high - x.low), 0) / 10;
@@ -130,6 +136,7 @@ function buildLibrary(): { name: string; family: string; fn: SignalFn; note: (c:
     },
     {
       name: 'كسر قناة دونشيان 20', family: 'زخم',
+      how: 'نرسم أعلى قمة وأدنى قاع لآخر 20 شمعة (قناة). القاعدة: إغلاق فوق سقف القناة = شراء (زخم كاسر)، وإغلاق تحت أرضها = بيع — استراتيجية «السلاحف» الشهيرة لصيد الاتجاهات.',
       fn: (c, i) => {
         if (i < 21) return null;
         const hh = Math.max(...c.slice(i - 20, i).map((x) => x.high));
@@ -142,6 +149,7 @@ function buildLibrary(): { name: string; family: string; fn: SignalFn; note: (c:
     },
     {
       name: 'ستوكاستيك (14/3)', family: 'أوسيلاتور',
+      how: 'يقيس موقع الإغلاق ضمن مدى آخر 14 شمعة (0–100). القاعدة: خروجه صعوداً من منطقة 20 (تشبع بيعي) = شراء، وخروجه نزولاً من 80 (تشبع شرائي) = بيع — يصيد الارتدادات من التطرف.',
       fn: (c, i) => {
         if (i < 18) return null;
         const kArr: number[] = [];
@@ -160,6 +168,7 @@ function buildLibrary(): { name: string; family: string; fn: SignalFn; note: (c:
     },
     {
       name: 'ابتلاع شمعة + حجم', family: 'سعري/حجمي',
+      how: 'شرطان معاً: ① شمعة ابتلاعية — جسم الشمعة الحالية يبتلع جسم السابقة بالكامل بعكس لونها (خضراء تبتلع حمراء = شراء، والعكس = بيع) أي أن طرفاً قلب الصفقة تماماً. ② حجم الشمعة أعلى 20% على الأقل من متوسط آخر 20 شمعة — أي أن الانقلاب مدعوم بسيولة حقيقية لا حركة ضعيفة. إذا لم يتوفر حجم من الوسيط يُكتفى بشرط الابتلاع.',
       fn: (c, i) => {
         if (i < 2) return null;
         const avgVol = c.slice(Math.max(0, i - 20), i).reduce((a, x) => a + (x.volume ?? 0), 0) / 20;
@@ -258,7 +267,7 @@ export function runStrategyLab(candles: Candle[], slD = 15, tpD = 10, days = 0):
     } catch { /* بعض الاستراتيجيات تحتاج عمقاً أكبر */ }
 
     results.push({
-      name: st.name, family: st.family, trades, wins,
+      name: st.name, family: st.family, how: st.how, trades, wins,
       winRate: r1(winRate), netPnl: r1(net), profitFactor: r1(Math.min(profitFactor, 99)),
       maxConsecLoss: maxConsec, tradesPerDay: r1(trades / daysSpan),
       expectancy: r1(expectancy), quality, current, currentNote,

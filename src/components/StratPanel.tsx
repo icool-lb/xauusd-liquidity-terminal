@@ -7,6 +7,7 @@ const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2,
 export function StratPanel({ candles, price }: { candles: Candle[]; price: number }) {
   const [open, setOpen] = useState(true);
   const [showTv, setShowTv] = useState(false);
+  const [showHow, setShowHow] = useState(false);
   const results = useMemo(() => runStrategyLab(candles), [candles]);
   const plan = useMemo(() => mergedPlan(results, price), [results, price]);
 
@@ -34,6 +35,16 @@ export function StratPanel({ candles, price }: { candles: Candle[]; price: numbe
               <span><b className="text-white">{best.tradesPerDay}</b> صفقة/يوم</span>
               <span>جودة <b className="text-white">{best.quality}/100</b></span>
             </div>
+            <button onClick={() => setShowHow((v) => !v)} className="mt-1 w-full rounded-sm border border-amber-400/20 py-0.5 text-[9px] text-amber-200/80 transition hover:text-amber-100">
+              {showHow ? '▲ إخفاء الشرح' : '📖 كيف تعمل هذه الاستراتيجية؟ وماذا تعني الأرقام؟'}
+            </button>
+            {showHow && (
+              <div className="mt-1 space-y-1 rounded-sm bg-[#131316] p-1.5 text-[9px] leading-relaxed">
+                <p className="text-slate-300"><b className="text-amber-300">القاعدة:</b> {best.how}</p>
+                <p className="text-slate-400"><b className="text-white">نسبة النجاح:</b> كم صفقة من كل 100 أصابت الهدف. <b className="text-white">عامل الربح:</b> إجمالي الأرباح ÷ إجمالي الخسائر (فوق 1 = مربحة، وفوق 1.5 = قوية). <b className="text-white">الصافي:</b> الربح التراكمي خلال 30 يوماً بلوت 0.01. <b className="text-white">الجودة:</b> درجة المنصة المركّبة (ربحية + استمرارية + تكرار).</p>
+                <p className="text-amber-300/80">⚠️ هذه مرجعية قياس على بياناتك، وليست بطاقة دخول بحد ذاتها — استخدمها كتأكيد مع بطاقة صفقة اليوم، وتذكّر أن السبريد والانزلاق يقلّصان النتائج الحقيقية خصوصاً للاستراتيجيات كثيرة الصفقات.</p>
+              </div>
+            )}
           </div>
 
           {plan && (
@@ -102,26 +113,35 @@ export function StratPanel({ candles, price }: { candles: Candle[]; price: numbe
 }
 
 function StratRow({ r, rank }: { r: StrategyResult; rank: number }) {
+  const [showHow, setShowHow] = useState(false);
   const pnlColor = r.netPnl >= 0 ? 'text-emerald-300' : 'text-red-300';
   return (
-    <div className={`flex items-center gap-2 border-b border-[#222227] px-2 py-1.5 text-[9.5px] last:border-0 ${rank === 1 ? 'bg-amber-400/5' : ''}`}>
-      <span className={`w-4 font-mono font-black ${rank === 1 ? 'text-amber-300' : 'text-slate-600'}`}>{rank}</span>
-      <div className="flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="font-bold text-white">{r.name}</span>
-          <span className="rounded-sm bg-[#2c2c33] px-1 text-[8px] text-slate-500">{r.family}</span>
-          {r.current !== 'flat' && (
-            <span className={`font-black ${r.current === 'long' ? 'text-emerald-300' : 'text-red-300'}`}>{r.current === 'long' ? '▲' : '▼'}</span>
-          )}
+    <div className={`border-b border-[#222227] px-2 py-1.5 text-[9.5px] last:border-0 ${rank === 1 ? 'bg-amber-400/5' : ''}`}>
+      <button onClick={() => setShowHow((v) => !v)} className="flex w-full items-center gap-2 text-right">
+        <span className={`w-4 font-mono font-black ${rank === 1 ? 'text-amber-300' : 'text-slate-600'}`}>{rank}</span>
+        <div className="flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-white">{r.name}</span>
+            <span className="rounded-sm bg-[#2c2c33] px-1 text-[8px] text-slate-500">{r.family}</span>
+            {r.current !== 'flat' && (
+              <span className={`font-black ${r.current === 'long' ? 'text-emerald-300' : 'text-red-300'}`}>{r.current === 'long' ? '▲' : '▼'}</span>
+            )}
+            <span className="text-[8px] text-slate-600">{showHow ? '▲' : 'ℹ️'}</span>
+          </div>
+          <div className="mt-0.5 font-mono text-[8.5px] text-slate-500">
+            {r.trades} صفقة · {r.tradesPerDay}/يوم · أسوأ سلسلة خاسرة {r.maxConsecLoss}
+          </div>
         </div>
-        <div className="mt-0.5 font-mono text-[8.5px] text-slate-500">
-          {r.trades} صفقة · {r.tradesPerDay}/يوم · أسوأ سلسلة خاسرة {r.maxConsecLoss}
+        <div className="text-left font-mono" dir="ltr">
+          <div className={`font-bold ${pnlColor}`}>{r.netPnl >= 0 ? '+' : ''}{r.netPnl}$</div>
+          <div className="text-[8.5px] text-slate-500">{r.winRate}% · ج{r.quality}</div>
         </div>
-      </div>
-      <div className="text-left font-mono" dir="ltr">
-        <div className={`font-bold ${pnlColor}`}>{r.netPnl >= 0 ? '+' : ''}{r.netPnl}$</div>
-        <div className="text-[8.5px] text-slate-500">{r.winRate}% · ج{r.quality}</div>
-      </div>
+      </button>
+      {showHow && (
+        <p className="mt-1 rounded-sm bg-[#131316] p-1.5 text-[9px] leading-relaxed text-slate-400">
+          <b className="text-slate-200">كيف تعمل:</b> {r.how}
+        </p>
+      )}
     </div>
   );
 }

@@ -15,7 +15,7 @@ import { runStrategyLab, mergedPlan } from './lib/strategies';
 import { buildTfLadder, buildWave, waveSpeech } from './lib/dna';
 import { unlockAudio, setVoice, beep as beepLib, speak, signalChime } from './lib/audio';
 import {
-  analyzeDay, backtestFull, sessionOf, inKillZone, aggregate, detectWhales, analyzeConditions,
+  analyzeDay, backtestFull, sessionOf, inKillZone, aggregate, detectWhales, analyzeConditions, getSessionWindows,
   type Candle, type DayAnalysis, type NewsEvent,
 } from './lib/engine';
 import {
@@ -351,7 +351,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V29</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V30</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#2c2c33]" />
@@ -366,6 +366,11 @@ export default function App() {
         <span className={`flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-bold ${sessionColor[curSession]}`}>
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
           {sessionLabel[curSession]}
+          {curSession !== 'off' && (
+            <span className="font-mono text-[8px] font-normal opacity-70" dir="ltr">
+              {(() => { const w = getSessionWindows(); const hm = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`; const [s, e] = curSession === 'asia' ? [w.asiaStart, w.asiaEnd] : curSession === 'london' ? [w.londonStart, w.londonEnd] : [w.nyStart, w.nyEnd]; return `${hm(s)}-${hm(e)} UTC`; })()}
+            </span>
+          )}
         </span>
         {inKillZone(Math.floor(Date.now() / 1000)) && (
           <span className="rounded-sm border border-red-400/50 bg-red-400/10 px-2 py-0.5 text-[10px] font-black text-red-300 animate-pulse">

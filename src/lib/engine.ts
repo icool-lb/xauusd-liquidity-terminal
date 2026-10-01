@@ -94,11 +94,54 @@ function utcDayStart(t: number) {
   return Math.floor(t / DAY) * DAY;
 }
 
+// ---------- نوافذ الجلسات (قابلة للتوحيد مع TradingView) ----------
+// الافتراضي UTC: آسيا 00-08، لندن 08-13، نيويورك 13-21
+// يمكن للمستخدم تعديلها من صفحة الإعدادات لتطابق مؤشره في TradingView حرفياً
+export interface SessionWindows {
+  asiaStart: number; asiaEnd: number;
+  londonStart: number; londonEnd: number;
+  nyStart: number; nyEnd: number;
+}
+
+export const DEFAULT_SESSIONS: SessionWindows = {
+  asiaStart: 0, asiaEnd: 8,
+  londonStart: 8, londonEnd: 13,
+  nyStart: 13, nyEnd: 21,
+};
+
+const LS_SESSIONS = 'xau_sessions';
+
+function loadSessions(): SessionWindows {
+  try {
+    const raw = localStorage.getItem(LS_SESSIONS);
+    if (!raw) return { ...DEFAULT_SESSIONS };
+    const p = JSON.parse(raw) as SessionWindows;
+    const ok = [p.asiaStart, p.asiaEnd, p.londonStart, p.londonEnd, p.nyStart, p.nyEnd]
+      .every((v) => Number.isFinite(v) && v >= 0 && v <= 24);
+    return ok ? p : { ...DEFAULT_SESSIONS };
+  } catch { return { ...DEFAULT_SESSIONS }; }
+}
+
+let SESSIONS: SessionWindows = loadSessions();
+
+export function getSessionWindows(): SessionWindows { return { ...SESSIONS }; }
+
+export function setSessionWindows(w: SessionWindows) {
+  SESSIONS = { ...w };
+  try { localStorage.setItem(LS_SESSIONS, JSON.stringify(w)); } catch { /* تجاهل */ }
+}
+
+// يدعم النوافذ العابرة لمنتصف الليل (مثال 20:00 ← 04:00)
+function inWin(h: number, s: number, e: number): boolean {
+  if (s === e) return false;
+  return s < e ? (h >= s && h < e) : (h >= s || h < e);
+}
+
 export function sessionOf(t: number): 'asia' | 'london' | 'ny' | 'off' {
   const h = ((t % DAY) / 3600);
-  if (h < 8) return 'asia';
-  if (h < 13) return 'london';
-  if (h < 21) return 'ny';
+  if (inWin(h, SESSIONS.asiaStart, SESSIONS.asiaEnd)) return 'asia';
+  if (inWin(h, SESSIONS.londonStart, SESSIONS.londonEnd)) return 'london';
+  if (inWin(h, SESSIONS.nyStart, SESSIONS.nyEnd)) return 'ny';
   return 'off';
 }
 

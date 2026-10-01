@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { ConnectionPanel } from './Panels';
 import { loadDbKey, saveDbKey, checkDbKey } from '../lib/databento';
+import { getSessionWindows, setSessionWindows, DEFAULT_SESSIONS, type SessionWindows } from '../lib/engine';
 import type { MetaApiCreds } from '../lib/metaapi';
 
 const LS_TV = 'xau_tv_hook';
@@ -16,6 +17,82 @@ const lsGet = (k: string) => { try { return localStorage.getItem(k) ?? ''; } cat
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* تجاهل */ } };
 
 const inputCls = 'mt-0.5 w-full rounded-sm border border-[#2c2c33] bg-[#131316] px-2 py-1.5 font-mono text-[10.5px] text-white outline-none focus:border-amber-400/50';
+
+// تحويل ساعة عشرية ↔ نص "HH:MM"
+const h2s = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+const s2h = (s: string): number | null => {
+  const m = s.trim().match(/^(\d{1,2})[:.](\d{2})$/);
+  if (!m) return null;
+  const h = +m[1], mi = +m[2];
+  if (h > 24 || mi > 59) return null;
+  return h + mi / 60;
+};
+
+function SessionWindowsCard() {
+  const cur = getSessionWindows();
+  const [f, setF] = useState<Record<keyof SessionWindows, string>>({
+    asiaStart: h2s(cur.asiaStart), asiaEnd: h2s(cur.asiaEnd),
+    londonStart: h2s(cur.londonStart), londonEnd: h2s(cur.londonEnd),
+    nyStart: h2s(cur.nyStart), nyEnd: h2s(cur.nyEnd),
+  });
+  const [msg, setMsg] = useState('');
+
+  const apply = () => {
+    const w: SessionWindows = {
+      asiaStart: s2h(f.asiaStart) ?? -1, asiaEnd: s2h(f.asiaEnd) ?? -1,
+      londonStart: s2h(f.londonStart) ?? -1, londonEnd: s2h(f.londonEnd) ?? -1,
+      nyStart: s2h(f.nyStart) ?? -1, nyEnd: s2h(f.nyEnd) ?? -1,
+    };
+    if (Object.values(w).some((v) => v < 0)) { setMsg('⚠️ صيغة غير صحيحة — استخدم HH:MM مثل 02:00'); return; }
+    if (w.asiaStart === w.asiaEnd || w.londonStart === w.londonEnd || w.nyStart === w.nyEnd) { setMsg('⚠️ بداية النافذة لا يمكن أن تساوي نهايتها'); return; }
+    setSessionWindows(w);
+    setMsg('✅ حُفظت النوافذ — يُعاد تحميل المنصة لتوحيد كل المستويات والتحليلات…');
+    setTimeout(() => location.reload(), 900);
+  };
+
+  const reset = () => {
+    setF({
+      asiaStart: h2s(DEFAULT_SESSIONS.asiaStart), asiaEnd: h2s(DEFAULT_SESSIONS.asiaEnd),
+      londonStart: h2s(DEFAULT_SESSIONS.londonStart), londonEnd: h2s(DEFAULT_SESSIONS.londonEnd),
+      nyStart: h2s(DEFAULT_SESSIONS.nyStart), nyEnd: h2s(DEFAULT_SESSIONS.nyEnd),
+    });
+  };
+
+  const Row = ({ label, ks, ke }: { label: string; ks: keyof SessionWindows; ke: keyof SessionWindows }) => (
+    <div className="flex items-center gap-2">
+      <span className="w-20 shrink-0 text-[10px] text-slate-400">{label}</span>
+      <input value={f[ks]} onChange={(e) => setF({ ...f, [ks]: e.target.value })} className={inputCls} dir="ltr" placeholder="00:00" />
+      <span className="text-[10px] text-slate-600">←</span>
+      <input value={f[ke]} onChange={(e) => setF({ ...f, [ke]: e.target.value })} className={inputCls} dir="ltr" placeholder="08:00" />
+    </div>
+  );
+
+  return (
+    <div className="rounded-md border border-violet-400/30 bg-[#1a1a1e] p-3">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
+        <h3 className="text-[11px] font-bold text-violet-300">نوافذ الجلسات (UTC) — توحيد قمم/قيعان الجلسات مع TradingView</h3>
+      </div>
+      <p className="mb-2 text-[9.5px] leading-relaxed text-slate-500">
+        قمم وقيعان «آسيا/لندن/نيويورك» تُبنى عليها مستويات السيولة والسحب والإشارات — فأي اختلاف في التوقيت بين المنصة ومؤشرك في TradingView يغيّر الأرقام.
+        انسخ هنا نفس أوقات الجلسات من إعدادات مؤشرك (حوّلها إلى UTC) لتتطابق المنصتان تماماً.
+      </p>
+      <div className="space-y-1.5">
+        <Row label="آسيا 🌏" ks="asiaStart" ke="asiaEnd" />
+        <Row label="لندن 🇬🇧" ks="londonStart" ke="londonEnd" />
+        <Row label="نيويورك 🇺🇸" ks="nyStart" ke="nyEnd" />
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <button onClick={apply} className="rounded-sm border border-violet-400/40 px-3 py-1.5 text-[10px] font-bold text-violet-300 transition hover:bg-violet-400/10">احفظ ووحّد</button>
+        <button onClick={reset} className="rounded-sm border border-[#3a3a44] px-3 py-1.5 text-[10px] text-slate-500 transition hover:text-slate-300">إعادة للافتراضي</button>
+        <span className="font-mono text-[8.5px] text-slate-600" dir="ltr">
+          ICT NY: Asia 00:00-04:00 · London 06:00-10:00 · NY 12:30-15:00 UTC
+        </span>
+      </div>
+      {msg && <p className="mt-1.5 text-[9.5px] text-amber-200/90">{msg}</p>}
+    </div>
+  );
+}
 
 export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus }: {
   creds: MetaApiCreds | null;
@@ -80,7 +157,10 @@ export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus 
         </p>
       </div>
 
-      {/* ٣) ربط TradingView ← Telegram */}
+      {/* ٣) توحيد نوافذ الجلسات */}
+      <SessionWindowsCard />
+
+      {/* ٤) ربط TradingView ← Telegram */}
       <div className="rounded-md border border-[#2c2c33] bg-[#1a1a1e] p-3">
         <div className="mb-2 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />

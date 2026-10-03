@@ -52,6 +52,17 @@ export interface Signal {
   pnlR?: number;
 }
 
+export interface RejectedSetup {
+  label: string;      // المستوى المسحوب
+  price: number;      // سعر المستوى
+  side: 'long' | 'short';
+  entry: number;
+  stop: number;
+  tp1: number;
+  rr: number;
+  why: string;        // سبب الرفض
+}
+
 export interface DayAnalysis {
   dayKey: string;
   candles: Candle[];
@@ -71,6 +82,7 @@ export interface DayAnalysis {
   levels: Level[];
   sweeps: SweepEvent[];
   signals: Signal[];
+  rejected: RejectedSetup[];  // فرص وصلت لكسر هيكلي لكن رفضتها الفلاتر (شفافية الانضباط)
   bias: 'bullish' | 'bearish' | 'neutral';
   lastPrice: number;
 }
@@ -135,6 +147,27 @@ export function setSessionWindows(w: SessionWindows) {
 function inWin(h: number, s: number, e: number): boolean {
   if (s === e) return false;
   return s < e ? (h >= s && h < e) : (h >= s || h < e);
+}
+
+// ---------- قواعد الإشارة (قابلة للضبط من الإعدادات) ----------
+// الأسبوع الماضي على بيانات CME أثبت: التخفيف يضيف صفقات خاسرة (−7.8R بلا فلاتر مقابل −1R بالانضباط)
+export interface EngineCfg { maxSignals: number; minRR: number; openFilter: boolean; }
+export const DEFAULT_ENGINE_CFG: EngineCfg = { maxSignals: 1, minRR: 1.2, openFilter: true };
+const LS_ENGINE = 'xau_engine_cfg';
+function loadEngineCfg(): EngineCfg {
+  try {
+    const raw = localStorage.getItem(LS_ENGINE);
+    if (!raw) return { ...DEFAULT_ENGINE_CFG };
+    const p = JSON.parse(raw) as EngineCfg;
+    if (!Number.isFinite(p.maxSignals) || !Number.isFinite(p.minRR)) return { ...DEFAULT_ENGINE_CFG };
+    return { maxSignals: Math.max(1, Math.min(5, Math.round(p.maxSignals))), minRR: Math.max(0.5, Math.min(3, p.minRR)), openFilter: !!p.openFilter };
+  } catch { return { ...DEFAULT_ENGINE_CFG }; }
+}
+let ENGINE_CFG: EngineCfg = loadEngineCfg();
+export function getEngineCfg(): EngineCfg { return { ...ENGINE_CFG }; }
+export function setEngineCfg(c: EngineCfg) {
+  ENGINE_CFG = { ...c };
+  try { localStorage.setItem(LS_ENGINE, JSON.stringify(c)); } catch { /* تجاهل */ }
 }
 
 export function sessionOf(t: number): 'asia' | 'london' | 'ny' | 'off' {
@@ -399,6 +432,7 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
 
   // بعد كل سحب: ابحث عن كسر هيكلي (CHoCH) ثم ابنِ الإشارة
   const signals: Signal[] = [];
+  const rejected: RejectedSetup[] = [];
   const sigCandles = dayCandles;
   for (const sw of sweeps) {
     const startIdx = sigCandles.findIndex((c) => c.time === sw.time);
@@ -429,18 +463,28 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
     const buffer = 1.5;
     const stop = wantLong ? sw.extreme - buffer : sw.extreme + buffer;
     const risk = Math.abs(entry - stop);
-    if (risk < 2) continue;
-    // قاعدة الافتتاح: أسفل الافتتاح سلبي (لا شراء تحته)، وفوقه إيجابي (لا بيع فوقه)
-    if (wantLong && entry < open - 2) continue;
-    if (!wantLong && entry > open + 2) continue;
     // الأهداف: أقرب سيولة مقابلة لم تُسحب بعد، ثم المستوى التالي
     const fresh = levels.filter((l) => !l.swept);
     const upLevels = fresh.filter((l) => l.price > entry + 3).sort((a, b) => a.price - b.price);
     const dnLevels = fresh.filter((l) => l.price < entry - 3).sort((a, b) => b.price - a.price);
     const tp1 = wantLong ? (upLevels[0]?.price ?? entry + risk * 2) : (dnLevels[0]?.price ?? entry - risk * 2);
     const tp2 = wantLong ? (upLevels[1]?.price ?? entry + risk * 3) : (dnLevels[1]?.price ?? entry - risk * 3);
-    const rr = Math.abs(tp1 - entry) / risk;
-    if (rr < 1.2) continue;
+    const rr = risk > 0 ? Math.abs(tp1 - entry) / risk : 0;
+    // تسجيل الفرص المرفوضة (شفافية: ترى ما رفضه الانضباط ولماذا)
+    const pushRej = (why: string) => {
+      if (rejected.length < 6) rejected.push({
+        label: sw.levelLabel, price: sw.levelPrice, side: wantLong ? 'long' : 'short',
+        entry: r2(entry), stop: r2(stop), tp1: r2(tp1), rr: r2(rr), why,
+      });
+    };
+    if (risk < 2) { pushRej('وقف قريب جداً من الدخول'); continue; }
+    // قاعدة الافتتاح: أسفل الافتتاح سلبي (لا شراء تحته)، وفوقه إيجابي (لا بيع فوقه)
+    if (ENGINE_CFG.openFilter) {
+      if (wantLong && entry < open - 2) { pushRej('فلتر الافتتاح: لا شراء تحت الافتتاح'); continue; }
+      if (!wantLong && entry > open + 2) { pushRej('فلتر الافتتاح: لا بيع فوق الافتتاح'); continue; }
+    }
+    if (rr < ENGINE_CFG.minRR) { pushRej(`R:R ضعيف (${r2(rr)} < ${ENGINE_CFG.minRR})`); continue; }
+    if (signals.length >= ENGINE_CFG.maxSignals) { pushRej('تجاوز حصة الإشارات اليومية'); continue; }
 
     const reasons = [
       `سحب سيولة ${sw.levelLabel} (${sw.direction === 'below' ? 'أسفل' : 'فوق'} ${sw.levelPrice})`,
@@ -474,7 +518,7 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
       rr: r2(rr), reason: reasons, sweepTime: sw.time, chochTime: cc.time,
       status, exitPrice, pnlR,
     });
-    break; // إشارة واحدة لكل يوم (قاعدة الانضباط)
+    // لا break: نكمل المسح لتسجيل الفرص المرفوضة والالتزام بحصة اليوم
   }
 
   const lastPrice = dayCandles[dayCandles.length - 1].close;
@@ -486,7 +530,7 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
     pdh: r2(pdh), pdl: r2(pdl),
     londonHigh: r2(londonHigh), londonLow: r2(londonLow), nyHigh: r2(nyHigh), nyLow: r2(nyLow),
     prevLondonClose: r2(prevLondonClose), prevNyClose: r2(prevNyClose),
-    levels, sweeps, signals, bias, lastPrice: r2(lastPrice),
+    levels, sweeps, signals, rejected, bias, lastPrice: r2(lastPrice),
   };
 }
 

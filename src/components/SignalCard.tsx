@@ -52,6 +52,26 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
             ))}
           </div>
         )}
+        {(analysis?.rejected?.length ?? 0) > 0 && (
+          <div className="mt-1.5 rounded-sm border border-[#3a3a44] bg-[#131316] p-1.5">
+            <div className="mb-0.5 text-[9px] font-bold text-slate-400">
+              ⛔ فرص وصلت لكسر هيكلي ورفضها الانضباط ({analysis!.rejected.length}) — شفافية كاملة:
+            </div>
+            <div className="space-y-0.5">
+              {analysis!.rejected.slice(0, 4).map((r, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-x-2 font-mono text-[8.5px] text-slate-500">
+                  <span className={r.side === 'long' ? 'text-emerald-400/70' : 'text-red-400/70'}>{r.side === 'long' ? '▲ شراء' : '▼ بيع'}</span>
+                  <span>{r.label}</span>
+                  <span dir="ltr">دخول {fmt(r.entry)} · وقف {fmt(r.stop)} · هدف {fmt(r.tp1)}</span>
+                  <span className="text-amber-300/80">✗ {r.why}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-1 text-[8.5px] leading-relaxed text-slate-600">
+              تجربة الأسبوع الماضي على بيانات CME: كل فرصة رفضها فلتر الافتتاح كانت ستخسر (−9R موفَّرة). تستطيع تخفيف القواعد من ⚙ الإعدادات ← قواعد الإشارة — على مسؤوليتك.
+            </p>
+          </div>
+        )}
       </div>
     );
   }

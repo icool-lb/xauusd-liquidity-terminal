@@ -7,7 +7,8 @@
 import { useState } from 'react';
 import { ConnectionPanel } from './Panels';
 import { loadDbKey, saveDbKey, checkDbKey } from '../lib/databento';
-import { getSessionWindows, setSessionWindows, DEFAULT_SESSIONS, type SessionWindows } from '../lib/engine';
+import { getSessionWindows, setSessionWindows, DEFAULT_SESSIONS, type SessionWindows,
+         getEngineCfg, setEngineCfg, type EngineCfg } from '../lib/engine';
 import type { MetaApiCreds } from '../lib/metaapi';
 
 const LS_TV = 'xau_tv_hook';
@@ -94,6 +95,55 @@ function SessionWindowsCard() {
   );
 }
 
+function SignalRulesCard() {
+  const cur = getEngineCfg();
+  const [maxSignals, setMaxSignals] = useState(cur.maxSignals);
+  const [minRR, setMinRR] = useState(cur.minRR);
+  const [openFilter, setOpenFilter] = useState(cur.openFilter);
+  const [msg, setMsg] = useState('');
+
+  const apply = () => {
+    const cfg: EngineCfg = { maxSignals, minRR, openFilter };
+    setEngineCfg(cfg);
+    setMsg('✅ حُفظت القواعد — يُعاد تحميل المنصة…');
+    setTimeout(() => location.reload(), 900);
+  };
+
+  const chip = (active: boolean) => `rounded-sm border px-2.5 py-1 text-[10px] font-bold transition ${active ? 'border-cyan-400/60 bg-cyan-400/15 text-cyan-200' : 'border-[#3a3a44] text-slate-500 hover:text-slate-300'}`;
+
+  return (
+    <div className="rounded-md border border-cyan-400/30 bg-[#1a1a1e] p-3">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+        <h3 className="text-[11px] font-bold text-cyan-300">قواعد الإشارة اليومية — صرامة الانضباط</h3>
+      </div>
+      <p className="mb-2 text-[9.5px] leading-relaxed text-slate-500">
+        اختبار الأسبوع الماضي على بيانات CME الحقيقية: الانضباط الحالي خسر <b className="text-slate-300">−1R</b> في صفقة واحدة، بينما الدخول بلا فلاتر على 24 فرصة خسر <b className="text-red-300">−7.8R</b> — الفلاتر منعت 9 صفقات كلها خاسرة. خفّف القواعد فقط إذا قبلت هذا الثمن.
+      </p>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="w-32 shrink-0 text-[10px] text-slate-400">عدد الإشارات/اليوم</span>
+          {[1, 2, 3].map((n) => <button key={n} onClick={() => setMaxSignals(n)} className={chip(maxSignals === n)}>{n === 1 ? '1 (صارم)' : n === 2 ? '2' : '3'}</button>)}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-32 shrink-0 text-[10px] text-slate-400">أدنى R:R مقبول</span>
+          {[1.5, 1.2, 1.0].map((n) => <button key={n} onClick={() => setMinRR(n)} className={chip(minRR === n)} dir="ltr">{n.toFixed(1)}</button>)}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-32 shrink-0 text-[10px] text-slate-400">فلتر الافتتاح اليومي</span>
+          <button onClick={() => setOpenFilter(true)} className={chip(openFilter)}>مفعّل (موصى به)</button>
+          <button onClick={() => setOpenFilter(false)} className={chip(!openFilter)}>معطّل ⚠</button>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <button onClick={apply} className="rounded-sm border border-cyan-400/40 px-3 py-1.5 text-[10px] font-bold text-cyan-300 transition hover:bg-cyan-400/10">احفظ القواعد</button>
+        <span className="text-[8.5px] text-slate-600">الفرص المرفوضة تظهر دائماً في بطاقة صفقة اليوم مع سبب الرفض</span>
+      </div>
+      {msg && <p className="mt-1.5 text-[9.5px] text-amber-200/90">{msg}</p>}
+    </div>
+  );
+}
+
 export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus }: {
   creds: MetaApiCreds | null;
   status: 'idle' | 'loading' | 'ok' | 'error';
@@ -160,7 +210,10 @@ export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus 
       {/* ٣) توحيد نوافذ الجلسات */}
       <SessionWindowsCard />
 
-      {/* ٤) ربط TradingView ← Telegram */}
+      {/* ٤) قواعد الإشارة */}
+      <SignalRulesCard />
+
+      {/* ٥) ربط TradingView ← Telegram */}
       <div className="rounded-md border border-[#2c2c33] bg-[#1a1a1e] p-3">
         <div className="mb-2 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />

@@ -82,6 +82,7 @@ export interface DayAnalysis {
   levels: Level[];
   sweeps: SweepEvent[];
   signals: Signal[];
+  momSignals: Signal[];    // محرك الزخم: BOS + ارتداد 50% (يلتقط الحركات الاستمرارية 10-30$)
   rejected: RejectedSetup[];  // فرص وصلت لكسر هيكلي لكن رفضتها الفلاتر (شفافية الانضباط)
   bias: 'bullish' | 'bearish' | 'neutral';
   lastPrice: number;
@@ -524,14 +525,119 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
   const lastPrice = dayCandles[dayCandles.length - 1].close;
   const bias = lastPrice > open + 2 ? 'bullish' : lastPrice < open - 2 ? 'bearish' : 'neutral';
 
+  // محرك الزخم المستقل: يلتقط الحركات الاستمرارية بعد استقرار مستويات اليوم
+  const momSignals = detectMomentumTrades(dayCandles, levels, dayStart);
+
   return {
     dayKey: new Date(dayStart * 1000).toISOString().slice(0, 10),
     candles: dayCandles, open: r2(open), asiaHigh: r2(asiaHigh), asiaLow: r2(asiaLow),
     pdh: r2(pdh), pdl: r2(pdl),
     londonHigh: r2(londonHigh), londonLow: r2(londonLow), nyHigh: r2(nyHigh), nyLow: r2(nyLow),
     prevLondonClose: r2(prevLondonClose), prevNyClose: r2(prevNyClose),
-    levels, sweeps, signals, rejected, bias, lastPrice: r2(lastPrice),
+    levels, sweeps, signals, momSignals, rejected, bias, lastPrice: r2(lastPrice),
   };
+}
+
+// ---------- محرك الزخم: كسر هيكلي مع الترند (BOS) + دخول بارتداد 50% ----------
+// يلتقط الحركات الاستمرارية 10–30$ التي لا يراها المحرك الانعكاسي:
+// عند BOS بموجة ≥ 8$ يُعلَّق أمر محدد عند منتصف الموجة لمدة 12 شمعة.
+export function detectMomentumTrades(dayCandles: Candle[], levels: Level[], dayStart: number,
+  minLeg = 8, retrace = 0.5, windowBars = 12, minRR = 1.0): Signal[] {
+  const n = dayCandles.length;
+  const out: Signal[] = [];
+  if (n < 20) return out;
+  const wing = 3;
+  const ph: (number | null)[] = new Array(n).fill(null);
+  const pl: (number | null)[] = new Array(n).fill(null);
+  for (let j = wing; j < n - wing; j++) {
+    let isH = true, isL = true;
+    for (let k = 1; k <= wing; k++) {
+      if (dayCandles[j].high < dayCandles[j - k].high || dayCandles[j].high < dayCandles[j + k].high) isH = false;
+      if (dayCandles[j].low > dayCandles[j - k].low || dayCandles[j].low > dayCandles[j + k].low) isL = false;
+    }
+    if (isH) ph[j] = dayCandles[j].high;
+    if (isL) pl[j] = dayCandles[j].low;
+  }
+  let lastPH: number | null = null, lastPL: number | null = null, lastPHi = -1, lastPLi = -1;
+  let armed: { dir: 'up' | 'down'; limit: number; stop: number; expiry: number; bosPx: number; bosTime: number } | null = null;
+  const used = { up: false, down: false };
+
+  for (let i = 0; i < n; i++) {
+    const j = i - wing;
+    if (j >= wing) {
+      if (ph[j] !== null) { lastPH = ph[j]; lastPHi = j; }
+      if (pl[j] !== null) { lastPL = pl[j]; lastPLi = j; }
+    }
+    const c = dayCandles[i];
+    if (armed && i > armed.expiry) armed = null;
+
+    // كشف BOS
+    let bos: 'up' | 'down' | null = null;
+    const prevClose = dayCandles[i - 1]?.close ?? c.close;
+    if (lastPH !== null && lastPHi < i && c.close > lastPH && prevClose <= lastPH) bos = 'up';
+    if (lastPL !== null && lastPLi < i && c.close < lastPL && prevClose >= lastPL) bos = 'down';
+    if (bos) {
+      if (armed && armed.dir !== bos) armed = null; // انعكاس يلغي التسليح
+      if (!used[bos]) {
+        if (bos === 'up') {
+          const legLo = Math.min(...dayCandles.slice(Math.max(0, i - 8), i + 1).map((x) => x.low));
+          const leg = c.close - legLo;
+          if (leg >= minLeg) armed = { dir: 'up', limit: c.close - retrace * leg, stop: legLo - 1.5, expiry: i + windowBars, bosPx: c.close, bosTime: c.time };
+        } else {
+          const legHi = Math.max(...dayCandles.slice(Math.max(0, i - 8), i + 1).map((x) => x.high));
+          const leg = legHi - c.close;
+          if (leg >= minLeg) armed = { dir: 'down', limit: c.close + retrace * leg, stop: legHi + 1.5, expiry: i + windowBars, bosPx: c.close, bosTime: c.time };
+        }
+        lastPH = null; lastPL = null; // استهلاك
+      }
+    }
+
+    // تعبئة أمر الارتداد
+    if (armed && !used[armed.dir]) {
+      const filled = armed.dir === 'up' ? c.low <= armed.limit : c.high >= armed.limit;
+      if (filled) {
+        const wl = armed.dir === 'up';
+        const entry = armed.limit, stop = armed.stop, risk = Math.abs(entry - stop);
+        if (risk < 2) { armed = null; continue; }
+        const fresh = levels.filter((l) => !l.swept);
+        const upLevels = fresh.filter((l) => l.price > entry + 3).sort((a, b) => a.price - b.price);
+        const dnLevels = fresh.filter((l) => l.price < entry - 3).sort((a, b) => b.price - a.price);
+        const tp1 = wl ? (upLevels[0]?.price ?? entry + risk * 2) : (dnLevels[0]?.price ?? entry - risk * 2);
+        const tp2 = wl ? (upLevels[1]?.price ?? entry + risk * 3) : (dnLevels[1]?.price ?? entry - risk * 3);
+        const rr = Math.abs(tp1 - entry) / risk;
+        if (rr < minRR) { armed = null; continue; }
+        let status: Signal['status'] = 'active';
+        let exitPrice: number | undefined;
+        let pnlR: number | undefined;
+        for (let k = i + 1; k < n; k++) {
+          const x = dayCandles[k];
+          if (wl) {
+            if (x.low <= stop) { status = 'sl'; exitPrice = stop; pnlR = -1; break; }
+            if (x.high >= tp2) { status = 'tp2'; exitPrice = tp2; pnlR = r2((tp2 - entry) / risk); break; }
+            if (x.high >= tp1) { status = 'tp1'; exitPrice = tp1; pnlR = r2((tp1 - entry) / risk); break; }
+          } else {
+            if (x.high >= stop) { status = 'sl'; exitPrice = stop; pnlR = -1; break; }
+            if (x.low <= tp2) { status = 'tp2'; exitPrice = tp2; pnlR = r2((entry - tp2) / risk); break; }
+            if (x.low <= tp1) { status = 'tp1'; exitPrice = tp1; pnlR = r2((entry - tp1) / risk); break; }
+          }
+        }
+        out.push({
+          id: `${dayStart}-mom-${armed.bosTime}`,
+          time: c.time, side: wl ? 'long' : 'short',
+          entry: r2(entry), stop: r2(stop), tp1: r2(tp1), tp2: r2(tp2), rr: r2(rr),
+          reason: [
+            `كسر هيكلي مع الترند (BOS) عند ${r2(armed.bosPx)} — موجة ${r2(Math.abs(armed.bosPx - (wl ? stop + 1.5 : stop - 1.5)))}$`,
+            `دخول بارتداد ${Math.round(retrace * 100)}% من موجة الكسر (أمر محدد)`,
+            `الوقف خلف طرف الموجة بمسافة أمان 1.5$`,
+          ],
+          sweepTime: armed.bosTime, chochTime: c.time,
+          status, exitPrice, pnlR,
+        });
+        used[armed.dir] = true; armed = null;
+      }
+    }
+  }
+  return out;
 }
 
 export interface BacktestStats {

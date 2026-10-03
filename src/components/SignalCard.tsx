@@ -20,6 +20,36 @@ function StatusBadge({ s }: { s: Signal }) {
   );
 }
 
+// ⚡ صفقات الزخم: BOS + ارتداد 50% — تلتقط الحركات الاستمرارية 10–30$
+function MomBlock({ analysis }: { analysis: DayAnalysis }) {
+  const moms = analysis.momSignals ?? [];
+  if (!moms.length) return null;
+  return (
+    <div className="mt-1.5 rounded-sm border border-orange-400/30 bg-orange-400/5 p-1.5">
+      <div className="mb-0.5 text-[9px] font-bold text-orange-300">⚡ محرك الزخم — صفقات استمرار الحركة (BOS + ارتداد 50%)</div>
+      <div className="space-y-1">
+        {moms.map((m) => {
+          const long = m.side === 'long';
+          const statusTxt = m.status === 'active' ? '⏳ نشطة' : m.status === 'sl' ? '❌ وقف −1R' : m.status === 'tp1' ? `✅ هدف 1 (+${m.pnlR}R)` : `✅✅ هدف 2 (+${m.pnlR}R)`;
+          return (
+            <div key={m.id} className="rounded-sm bg-[#0a0a0c] p-1.5">
+              <div className="flex flex-wrap items-center gap-x-2 text-[9px]">
+                <span className={`font-black ${long ? 'text-emerald-300' : 'text-red-300'}`}>{long ? 'شراء ▲' : 'بيع ▼'}</span>
+                <span className="font-mono text-slate-400" dir="ltr">{hm(m.time)} UTC</span>
+                <span className="font-mono text-[8.5px] text-slate-300" dir="ltr">
+                  دخول <b className="text-white">{fmt(m.entry)}</b> · وقف <b className="text-red-300">{fmt(m.stop)}</b> · هدف <b className="text-emerald-300">{fmt(m.tp1)}</b>
+                </span>
+                <span className={`font-bold ${m.status === 'active' ? 'text-slate-400' : m.status === 'sl' ? 'text-red-300' : 'text-emerald-300'}`}>{statusTxt}</span>
+              </div>
+              <p className="mt-0.5 text-[8.5px] leading-relaxed text-slate-500">{m.reason[0]} — {m.reason[1]}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; price: number }) {
   const sig = analysis?.signals[0] ?? null;
 
@@ -72,6 +102,7 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
             </p>
           </div>
         )}
+        {analysis && <MomBlock analysis={analysis} />}
       </div>
     );
   }
@@ -152,6 +183,7 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
           🔄 فاتك الدخول؟ منطقة الارتداد المثالية: <b dir="ltr">{fmt(Math.min(ote.oteTop, ote.oteBottom))} – {fmt(Math.max(ote.oteTop, ote.oteBottom))}</b> — تُدخل منها فقط بعد شمعة تأكيد {long ? 'صاعدة' : 'هابطة'}، وبنفس الوقف والهدف.
         </p>
       )}
+      <MomBlock analysis={analysis} />
     </div>
   );
 }

@@ -33,6 +33,7 @@ export interface SweepEvent {
   direction: 'below' | 'above'; // سحب أسفل المستوى أو فوقه
   extreme: number; // قاع/قمة السحب
   penetration: number;
+  volRatio?: number; // حجم شمعة السحب ÷ متوسط 20 شمعة قبلها (NaN إن لم يتوفر حجم)
 }
 
 export interface Signal {
@@ -50,6 +51,23 @@ export interface Signal {
   status: 'active' | 'tp1' | 'tp2' | 'sl';
   exitPrice?: number;
   pnlR?: number;
+  kind?: 'sweep' | 'mom';
+  score?: number;      // 0..100 توافق الشروط (ليس احتمال ربح)
+  volRatio?: number;
+}
+
+// أمر زخم معلّق: BOS حدث ولم يُعبَّأ الارتداد بعد — يُبلَّغ فور الكسر لا بعد التعبئة
+export interface PendingOrder {
+  side: 'long' | 'short';
+  limit: number;
+  stop: number;
+  tp1: number;
+  tp2: number;
+  rr: number;
+  bosTime: number;
+  expiresAt: number;   // وقت انتهاء صلاحية الأمر (unix)
+  volRatio?: number;
+  reason: string[];
 }
 
 export interface RejectedSetup {
@@ -83,6 +101,7 @@ export interface DayAnalysis {
   sweeps: SweepEvent[];
   signals: Signal[];
   momSignals: Signal[];    // محرك الزخم: BOS + ارتداد 50% (يلتقط الحركات الاستمرارية 10-30$)
+  momPending: PendingOrder | null; // أمر زخم معلّق الآن (آخر يوم فقط ذو معنى)
   rejected: RejectedSetup[];  // فرص وصلت لكسر هيكلي لكن رفضتها الفلاتر (شفافية الانضباط)
   bias: 'bullish' | 'bearish' | 'neutral';
   lastPrice: number;
@@ -152,24 +171,73 @@ function inWin(h: number, s: number, e: number): boolean {
 
 // ---------- قواعد الإشارة (قابلة للضبط من الإعدادات) ----------
 // الأسبوع الماضي على بيانات CME أثبت: التخفيف يضيف صفقات خاسرة (−7.8R بلا فلاتر مقابل −1R بالانضباط)
-export interface EngineCfg { maxSignals: number; minRR: number; openFilter: boolean; }
-export const DEFAULT_ENGINE_CFG: EngineCfg = { maxSignals: 1, minRR: 1.2, openFilter: true };
+// sweepVol / momVol: أدنى نسبة حجم (شمعة السحب / شمعة الكسر) إلى متوسط 20 شمعة. 0 = معطّل.
+// إن لم يوفّر الوسيط حجماً (كل القيم صفر) يُتخطّى الفلتر تلقائياً بدل أن يمنع كل الإشارات.
+export interface EngineCfg {
+  maxSignals: number; minRR: number; openFilter: boolean;
+  sweepVol: number; momVol: number; momBias: boolean; momOn: boolean;
+  momMinLeg: number; momRetrace: number; momWindow: number;
+}
+export const DEFAULT_ENGINE_CFG: EngineCfg = {
+  maxSignals: 1, minRR: 1.2, openFilter: true,
+  // الفلاتر الجديدة معطّلة افتراضياً: الزخم أعطى نتائج جيدة كما هو، والمختبر يقيس أثرها على بيانات المستخدم قبل اعتمادها
+  sweepVol: 0, momVol: 0, momBias: false, momOn: true,
+  momMinLeg: 8, momRetrace: 0.5, momWindow: 12,
+};
+const clampN = (v: unknown, lo: number, hi: number, d: number) => (Number.isFinite(v as number) ? Math.max(lo, Math.min(hi, v as number)) : d);
+export function normalizeCfg(p: Partial<EngineCfg>): EngineCfg {
+  const D = DEFAULT_ENGINE_CFG;
+  return {
+    maxSignals: Math.round(clampN(p.maxSignals, 1, 5, D.maxSignals)),
+    minRR: clampN(p.minRR, 0.5, 3, D.minRR),
+    openFilter: p.openFilter ?? D.openFilter,
+    sweepVol: clampN(p.sweepVol, 0, 3, D.sweepVol),
+    momVol: clampN(p.momVol, 0, 3, D.momVol),
+    momBias: p.momBias ?? D.momBias,
+    momOn: p.momOn ?? D.momOn,
+    momMinLeg: clampN(p.momMinLeg, 3, 30, D.momMinLeg),
+    momRetrace: clampN(p.momRetrace, 0.3, 0.7, D.momRetrace),
+    momWindow: Math.round(clampN(p.momWindow, 4, 24, D.momWindow)),
+  };
+}
 const LS_ENGINE = 'xau_engine_cfg';
 function loadEngineCfg(): EngineCfg {
   try {
     const raw = localStorage.getItem(LS_ENGINE);
     if (!raw) return { ...DEFAULT_ENGINE_CFG };
-    const p = JSON.parse(raw) as EngineCfg;
-    if (!Number.isFinite(p.maxSignals) || !Number.isFinite(p.minRR)) return { ...DEFAULT_ENGINE_CFG };
-    return { maxSignals: Math.max(1, Math.min(5, Math.round(p.maxSignals))), minRR: Math.max(0.5, Math.min(3, p.minRR)), openFilter: !!p.openFilter };
+    return normalizeCfg(JSON.parse(raw) as Partial<EngineCfg>);
   } catch { return { ...DEFAULT_ENGINE_CFG }; }
 }
 let ENGINE_CFG: EngineCfg = loadEngineCfg();
 export function getEngineCfg(): EngineCfg { return { ...ENGINE_CFG }; }
-export function setEngineCfg(c: EngineCfg) {
-  ENGINE_CFG = { ...c };
+export function setEngineCfg(c: Partial<EngineCfg>) {
+  ENGINE_CFG = normalizeCfg({ ...ENGINE_CFG, ...c });
+  c = ENGINE_CFG;
   try { localStorage.setItem(LS_ENGINE, JSON.stringify(c)); } catch { /* تجاهل */ }
 }
+
+// تشغيل دالة بإعدادات مؤقتة (للمقارنة والباك-تيست والماسح الخادمي) ثم الإرجاع
+export function withCfg<T>(c: Partial<EngineCfg>, fn: () => T): T {
+  const prev = ENGINE_CFG;
+  ENGINE_CFG = normalizeCfg({ ...prev, ...c });
+  try { return fn(); } finally { ENGINE_CFG = prev; }
+}
+
+// نسبة حجم كل شمعة إلى متوسط 20 شمعة قبلها. NaN إن لم يتوفر حجم.
+export function volRatios(all: Candle[]): Map<number, number> {
+  const m = new Map<number, number>();
+  let sum = 0;
+  const q: number[] = [];
+  for (const c of all) {
+    const v = c.volume ?? 0;
+    const avg = q.length >= 10 ? sum / q.length : 0;
+    m.set(c.time, avg > 0 && v > 0 ? v / avg : NaN);
+    q.push(v); sum += v;
+    if (q.length > 20) sum -= q.shift()!;
+  }
+  return m;
+}
+const volOk = (r: number | undefined, min: number) => !min || !Number.isFinite(r as number) || (r as number) >= min;
 
 export function sessionOf(t: number): 'asia' | 'london' | 'ny' | 'off' {
   const h = ((t % DAY) / 3600);
@@ -415,6 +483,7 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
 
   // كشف السحب: فتيل يخترق المستوى بعد آسيا ثم إغلاق يعود داخله
   const sweeps: SweepEvent[] = [];
+  const VR = volRatios(all.filter((c) => c.time < dayStart + DAY && c.time >= dayStart - 3 * DAY));
   const post = dayCandles.filter((c) => sessionOf(c.time) !== 'asia');
   const sweepLevels = levels.filter((l) => l.kind !== 'OPEN');
   for (const c of post) {
@@ -423,10 +492,10 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
       const isUpper = lv.price > open; // سيولة علوية
       if (isUpper && c.high > lv.price + 0.5 && c.close < lv.price) {
         lv.swept = true; lv.sweptAt = c.time;
-        sweeps.push({ time: c.time, levelLabel: lv.label, levelPrice: lv.price, direction: 'above', extreme: c.high, penetration: r2(c.high - lv.price) });
+        sweeps.push({ time: c.time, levelLabel: lv.label, levelPrice: lv.price, direction: 'above', extreme: c.high, penetration: r2(c.high - lv.price), volRatio: VR.get(c.time) });
       } else if (!isUpper && c.low < lv.price - 0.5 && c.close > lv.price) {
         lv.swept = true; lv.sweptAt = c.time;
-        sweeps.push({ time: c.time, levelLabel: lv.label, levelPrice: lv.price, direction: 'below', extreme: c.low, penetration: r2(lv.price - c.low) });
+        sweeps.push({ time: c.time, levelLabel: lv.label, levelPrice: lv.price, direction: 'below', extreme: c.low, penetration: r2(lv.price - c.low), volRatio: VR.get(c.time) });
       }
     }
   }
@@ -479,6 +548,8 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
       });
     };
     if (risk < 2) { pushRej('وقف قريب جداً من الدخول'); continue; }
+    // فلتر الحجم: سحب حقيقي = أوامر وقف تُضرب بحجم أعلى من المعتاد
+    if (!volOk(sw.volRatio, ENGINE_CFG.sweepVol)) { pushRej(`حجم السحب ضعيف (×${r2(sw.volRatio ?? 0)} < ×${ENGINE_CFG.sweepVol})`); continue; }
     // قاعدة الافتتاح: أسفل الافتتاح سلبي (لا شراء تحته)، وفوقه إيجابي (لا بيع فوقه)
     if (ENGINE_CFG.openFilter) {
       if (wantLong && entry < open - 2) { pushRej('فلتر الافتتاح: لا شراء تحت الافتتاح'); continue; }
@@ -487,8 +558,10 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
     if (rr < ENGINE_CFG.minRR) { pushRej(`R:R ضعيف (${r2(rr)} < ${ENGINE_CFG.minRR})`); continue; }
     if (signals.length >= ENGINE_CFG.maxSignals) { pushRej('تجاوز حصة الإشارات اليومية'); continue; }
 
+    const lvObj = levels.find((l) => l.label === sw.levelLabel);
     const reasons = [
       `سحب سيولة ${sw.levelLabel} (${sw.direction === 'below' ? 'أسفل' : 'فوق'} ${sw.levelPrice})`,
+      ...(Number.isFinite(sw.volRatio as number) ? [`حجم شمعة السحب ×${r2(sw.volRatio as number)} من المتوسط`] : []),
       `كسر هيكلي ${wantLong ? 'صاعد' : 'هابط'} بعد السحب`,
       entry > open
         ? 'التداول فوق الافتتاح = إيجابي (موافق للقاعدة)'
@@ -517,7 +590,8 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
       time: cc.time, side: wantLong ? 'long' : 'short',
       entry: r2(entry), stop: r2(stop), tp1: r2(tp1), tp2: r2(tp2),
       rr: r2(rr), reason: reasons, sweepTime: sw.time, chochTime: cc.time,
-      status, exitPrice, pnlR,
+      status, exitPrice, pnlR, kind: 'sweep', volRatio: sw.volRatio,
+      score: scoreOf({ rr, strength: lvObj?.strength, volRatio: sw.volRatio, withBias: true, t: cc.time }),
     });
     // لا break: نكمل المسح لتسجيل الفرص المرفوضة والالتزام بحصة اليوم
   }
@@ -526,7 +600,11 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
   const bias = lastPrice > open + 2 ? 'bullish' : lastPrice < open - 2 ? 'bearish' : 'neutral';
 
   // محرك الزخم المستقل: يلتقط الحركات الاستمرارية بعد استقرار مستويات اليوم
-  const momSignals = detectMomentumTrades(dayCandles, levels, dayStart);
+  const mom = ENGINE_CFG.momOn
+    ? detectMomentumState(dayCandles, levels, dayStart, open, VR)
+    : { signals: [] as Signal[], pending: null };
+  const momSignals = mom.signals;
+  const momPending = mom.pending;
 
   return {
     dayKey: new Date(dayStart * 1000).toISOString().slice(0, 10),
@@ -534,18 +612,37 @@ export function analyzeDay(all: Candle[], dayStart: number): DayAnalysis | null 
     pdh: r2(pdh), pdl: r2(pdl),
     londonHigh: r2(londonHigh), londonLow: r2(londonLow), nyHigh: r2(nyHigh), nyLow: r2(nyLow),
     prevLondonClose: r2(prevLondonClose), prevNyClose: r2(prevNyClose),
-    levels, sweeps, signals, momSignals, rejected, bias, lastPrice: r2(lastPrice),
+    levels, sweeps, signals, momSignals, momPending, rejected, bias, lastPrice: r2(lastPrice),
   };
+}
+
+// ---------- درجة توافق الشروط (0..100) — تُعرض في التنبيهات، ليست احتمال ربح ----------
+export function scoreOf(o: { rr: number; strength?: LevelStrength; volRatio?: number; withBias: boolean; t: number }): number {
+  let s = 0;
+  s += Math.min(o.rr / 3, 1) * 25;                                                     // جودة R:R
+  s += o.strength === 'strong' ? 25 : o.strength === 'medium' ? 15 : o.strength ? 6 : 12; // قوة المستوى
+  s += Number.isFinite(o.volRatio as number) ? Math.min(((o.volRatio as number) - 0.8) / 1.2, 1) * 25 : 10; // الحجم
+  s += o.withBias ? 15 : 0;                                                             // مع انحياز الافتتاح
+  s += inKillZone(o.t) ? 10 : 0;                                                        // داخل منطقة القتل
+  return Math.max(0, Math.min(100, Math.round(s)));
 }
 
 // ---------- محرك الزخم: كسر هيكلي مع الترند (BOS) + دخول بارتداد 50% ----------
 // يلتقط الحركات الاستمرارية 10–30$ التي لا يراها المحرك الانعكاسي:
-// عند BOS بموجة ≥ 8$ يُعلَّق أمر محدد عند منتصف الموجة لمدة 12 شمعة.
+// عند BOS بموجة ≥ minLeg$ يُعلَّق أمر محدد عند منتصف الموجة لمدة windowBars شمعة.
+// التطوير: (1) حجم شمعة الكسر ≥ momVol × المتوسط، (2) الكسر مع انحياز الافتتاح فقط (momBias)،
+// (3) يُعاد الأمر المعلّق نفسه (pending) فيُبلَّغ فور الكسر بدل انتظار التعبئة.
 export function detectMomentumTrades(dayCandles: Candle[], levels: Level[], dayStart: number,
-  minLeg = 8, retrace = 0.5, windowBars = 12, minRR = 1.0): Signal[] {
+  minLeg = ENGINE_CFG.momMinLeg, retrace = ENGINE_CFG.momRetrace, windowBars = ENGINE_CFG.momWindow, minRR = 1.0): Signal[] {
+  return detectMomentumState(dayCandles, levels, dayStart, NaN, undefined, minLeg, retrace, windowBars, minRR).signals;
+}
+
+export function detectMomentumState(dayCandles: Candle[], levels: Level[], dayStart: number, dayOpen: number,
+  VR?: Map<number, number>, minLeg = ENGINE_CFG.momMinLeg, retrace = ENGINE_CFG.momRetrace,
+  windowBars = ENGINE_CFG.momWindow, minRR = 1.0): { signals: Signal[]; pending: PendingOrder | null } {
   const n = dayCandles.length;
   const out: Signal[] = [];
-  if (n < 20) return out;
+  if (n < 20) return { signals: out, pending: null };
   const wing = 3;
   const ph: (number | null)[] = new Array(n).fill(null);
   const pl: (number | null)[] = new Array(n).fill(null);
@@ -559,8 +656,25 @@ export function detectMomentumTrades(dayCandles: Candle[], levels: Level[], dayS
     if (isL) pl[j] = dayCandles[j].low;
   }
   let lastPH: number | null = null, lastPL: number | null = null, lastPHi = -1, lastPLi = -1;
-  let armed: { dir: 'up' | 'down'; limit: number; stop: number; expiry: number; bosPx: number; bosTime: number } | null = null;
+  type Armed = { dir: 'up' | 'down'; limit: number; stop: number; expiry: number; bosPx: number; bosTime: number; leg: number; vr?: number };
+  let armed: Armed | null = null;
   const used = { up: false, down: false };
+  const targets = (entry: number, risk: number, wl: boolean) => {
+    const fresh = levels.filter((l) => !l.swept && Number.isFinite(l.price));
+    const upLevels = fresh.filter((l) => l.price > entry + 3).sort((a, b) => a.price - b.price);
+    const dnLevels = fresh.filter((l) => l.price < entry - 3).sort((a, b) => b.price - a.price);
+    const tp1 = wl ? (upLevels[0]?.price ?? entry + risk * 2) : (dnLevels[0]?.price ?? entry - risk * 2);
+    const tp2 = wl ? (upLevels[1]?.price ?? entry + risk * 3) : (dnLevels[1]?.price ?? entry - risk * 3);
+    const strength = (wl ? upLevels[0] : dnLevels[0])?.strength;
+    return { tp1, tp2, rr: Math.abs(tp1 - entry) / risk, strength };
+  };
+  const reasonsOf = (a: Armed, wl: boolean) => [
+    `كسر هيكلي مع الترند (BOS) عند ${r2(a.bosPx)} — موجة ${r2(a.leg)}$`,
+    ...(Number.isFinite(a.vr as number) ? [`حجم شمعة الكسر ×${r2(a.vr as number)} من المتوسط`] : []),
+    ...(Number.isFinite(dayOpen) ? [wl ? 'فوق الافتتاح = إيجابي (مع الانحياز)' : 'تحت الافتتاح = سلبي (مع الانحياز)'] : []),
+    `دخول بارتداد ${Math.round(retrace * 100)}% من موجة الكسر (أمر محدد)`,
+    `الوقف خلف طرف الموجة بمسافة أمان 1.5$`,
+  ];
 
   for (let i = 0; i < n; i++) {
     const j = i - wing;
@@ -578,18 +692,21 @@ export function detectMomentumTrades(dayCandles: Candle[], levels: Level[], dayS
     if (lastPL !== null && lastPLi < i && c.close < lastPL && prevClose >= lastPL) bos = 'down';
     if (bos) {
       if (armed && armed.dir !== bos) armed = null; // انعكاس يلغي التسليح
-      if (!used[bos]) {
+      const vr = VR?.get(c.time);
+      const biasOk = !ENGINE_CFG.momBias || !Number.isFinite(dayOpen) || (bos === 'up' ? c.close > dayOpen : c.close < dayOpen);
+      if (!used[bos] && biasOk && volOk(vr, ENGINE_CFG.momVol)) {
         if (bos === 'up') {
           const legLo = Math.min(...dayCandles.slice(Math.max(0, i - 8), i + 1).map((x) => x.low));
           const leg = c.close - legLo;
-          if (leg >= minLeg) armed = { dir: 'up', limit: c.close - retrace * leg, stop: legLo - 1.5, expiry: i + windowBars, bosPx: c.close, bosTime: c.time };
+          if (leg >= minLeg) armed = { dir: 'up', limit: c.close - retrace * leg, stop: legLo - 1.5, expiry: i + windowBars, bosPx: c.close, bosTime: c.time, leg, vr };
         } else {
           const legHi = Math.max(...dayCandles.slice(Math.max(0, i - 8), i + 1).map((x) => x.high));
           const leg = legHi - c.close;
-          if (leg >= minLeg) armed = { dir: 'down', limit: c.close + retrace * leg, stop: legHi + 1.5, expiry: i + windowBars, bosPx: c.close, bosTime: c.time };
+          if (leg >= minLeg) armed = { dir: 'down', limit: c.close + retrace * leg, stop: legHi + 1.5, expiry: i + windowBars, bosPx: c.close, bosTime: c.time, leg, vr };
         }
-        lastPH = null; lastPL = null; // استهلاك
       }
+      if (!used[bos]) { lastPH = null; lastPL = null; } // استهلاك (كالأصل)
+      if (armed && armed.bosTime === c.time) continue; // لا تعبئة على شمعة الكسر نفسها
     }
 
     // تعبئة أمر الارتداد
@@ -599,45 +716,77 @@ export function detectMomentumTrades(dayCandles: Candle[], levels: Level[], dayS
         const wl = armed.dir === 'up';
         const entry = armed.limit, stop = armed.stop, risk = Math.abs(entry - stop);
         if (risk < 2) { armed = null; continue; }
-        const fresh = levels.filter((l) => !l.swept);
-        const upLevels = fresh.filter((l) => l.price > entry + 3).sort((a, b) => a.price - b.price);
-        const dnLevels = fresh.filter((l) => l.price < entry - 3).sort((a, b) => b.price - a.price);
-        const tp1 = wl ? (upLevels[0]?.price ?? entry + risk * 2) : (dnLevels[0]?.price ?? entry - risk * 2);
-        const tp2 = wl ? (upLevels[1]?.price ?? entry + risk * 3) : (dnLevels[1]?.price ?? entry - risk * 3);
-        const rr = Math.abs(tp1 - entry) / risk;
+        const { tp1, tp2, rr, strength } = targets(entry, risk, wl);
         if (rr < minRR) { armed = null; continue; }
         let status: Signal['status'] = 'active';
         let exitPrice: number | undefined;
         let pnlR: number | undefined;
-        for (let k = i + 1; k < n; k++) {
+        // شمعة التعبئة نفسها قد تضرب الوقف (محافظ)
+        for (let k = i; k < n; k++) {
           const x = dayCandles[k];
           if (wl) {
             if (x.low <= stop) { status = 'sl'; exitPrice = stop; pnlR = -1; break; }
-            if (x.high >= tp2) { status = 'tp2'; exitPrice = tp2; pnlR = r2((tp2 - entry) / risk); break; }
-            if (x.high >= tp1) { status = 'tp1'; exitPrice = tp1; pnlR = r2((tp1 - entry) / risk); break; }
+            if (k > i && x.high >= tp2) { status = 'tp2'; exitPrice = tp2; pnlR = r2((tp2 - entry) / risk); break; }
+            if (k > i && x.high >= tp1) { status = 'tp1'; exitPrice = tp1; pnlR = r2((tp1 - entry) / risk); break; }
           } else {
             if (x.high >= stop) { status = 'sl'; exitPrice = stop; pnlR = -1; break; }
-            if (x.low <= tp2) { status = 'tp2'; exitPrice = tp2; pnlR = r2((entry - tp2) / risk); break; }
-            if (x.low <= tp1) { status = 'tp1'; exitPrice = tp1; pnlR = r2((entry - tp1) / risk); break; }
+            if (k > i && x.low <= tp2) { status = 'tp2'; exitPrice = tp2; pnlR = r2((entry - tp2) / risk); break; }
+            if (k > i && x.low <= tp1) { status = 'tp1'; exitPrice = tp1; pnlR = r2((entry - tp1) / risk); break; }
           }
         }
         out.push({
           id: `${dayStart}-mom-${armed.bosTime}`,
           time: c.time, side: wl ? 'long' : 'short',
           entry: r2(entry), stop: r2(stop), tp1: r2(tp1), tp2: r2(tp2), rr: r2(rr),
-          reason: [
-            `كسر هيكلي مع الترند (BOS) عند ${r2(armed.bosPx)} — موجة ${r2(Math.abs(armed.bosPx - (wl ? stop + 1.5 : stop - 1.5)))}$`,
-            `دخول بارتداد ${Math.round(retrace * 100)}% من موجة الكسر (أمر محدد)`,
-            `الوقف خلف طرف الموجة بمسافة أمان 1.5$`,
-          ],
+          reason: reasonsOf(armed, wl),
           sweepTime: armed.bosTime, chochTime: c.time,
-          status, exitPrice, pnlR,
+          status, exitPrice, pnlR, kind: 'mom', volRatio: armed.vr,
+          score: scoreOf({ rr, strength, volRatio: armed.vr, withBias: Number.isFinite(dayOpen), t: armed.bosTime }),
         });
         used[armed.dir] = true; armed = null;
       }
     }
   }
-  return out;
+  // أمر معلّق لم يُعبَّأ ولم تنتهِ صلاحيته بعد
+  let pending: PendingOrder | null = null;
+  if (armed && !used[armed.dir] && armed.expiry >= n - 1) {
+    const wl = armed.dir === 'up';
+    const risk = Math.abs(armed.limit - armed.stop);
+    if (risk >= 2) {
+      const { tp1, tp2, rr } = targets(armed.limit, risk, wl);
+      if (rr >= minRR) pending = {
+        side: wl ? 'long' : 'short', limit: r2(armed.limit), stop: r2(armed.stop), tp1: r2(tp1), tp2: r2(tp2), rr: r2(rr),
+        bosTime: armed.bosTime, expiresAt: dayCandles[n - 1].time + (armed.expiry - (n - 1)) * M15, volRatio: armed.vr,
+        reason: reasonsOf(armed, wl),
+      };
+    }
+  }
+  return { signals: out, pending };
+}
+
+// ---------- باك-تيست الاستراتيجيتين معاً أو كلّ على حدة ----------
+export interface StratBt { kind: 'sweep' | 'mom' | 'all'; trades: number; wins: number; winRate: number; totalR: number; expectancyR: number; maxDD: number; }
+export function backtestStrats(all: Candle[], days: number, cfg?: Partial<EngineCfg>): Record<'sweep' | 'mom' | 'all', StratBt> {
+  const run = () => {
+    const last = all.length ? all[all.length - 1].time : Math.floor(Date.now() / 1000);
+    const todayStart = utcDayStart(last);
+    const acc = { sweep: [] as number[], mom: [] as number[] };
+    for (let d = days; d >= 0; d--) {
+      const a = analyzeDay(all, todayStart - d * DAY);
+      if (!a) continue;
+      for (const s of a.signals) if (s.status !== 'active') acc.sweep.push(s.pnlR ?? 0);
+      for (const s of a.momSignals) if (s.status !== 'active') acc.mom.push(s.pnlR ?? 0);
+    }
+    const st = (kind: StratBt['kind'], rs: number[]): StratBt => {
+      let cum = 0, peak = 0, dd = 0;
+      for (const r of rs) { cum += r; peak = Math.max(peak, cum); dd = Math.max(dd, peak - cum); }
+      const wins = rs.filter((r) => r > 0).length;
+      return { kind, trades: rs.length, wins, winRate: rs.length ? Math.round((wins / rs.length) * 100) : 0,
+        totalR: r2(cum), expectancyR: rs.length ? r2(cum / rs.length) : 0, maxDD: r2(dd) };
+    };
+    return { sweep: st('sweep', acc.sweep), mom: st('mom', acc.mom), all: st('all', [...acc.sweep, ...acc.mom]) };
+  };
+  return cfg ? withCfg(cfg, run) : run();
 }
 
 export interface BacktestStats {

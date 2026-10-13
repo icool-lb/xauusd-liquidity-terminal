@@ -21,9 +21,28 @@ function StatusBadge({ s }: { s: Signal }) {
 }
 
 // ⚡ صفقات الزخم: BOS + ارتداد 50% — تلتقط الحركات الاستمرارية 10–30$
+function PendingBlock({ analysis }: { analysis: DayAnalysis }) {
+  const p = analysis.momPending;
+  if (!p) return null;
+  const long = p.side === 'long';
+  return (
+    <div className="mt-1.5 rounded-sm border border-dashed border-orange-400/60 bg-orange-400/10 p-1.5 text-[9px]">
+      <div className="flex flex-wrap items-center gap-x-2">
+        <span className="animate-pulse font-black text-orange-300">⏳ أمر زخم معلّق</span>
+        <span className={`font-black ${long ? 'text-emerald-300' : 'text-red-300'}`}>{long ? 'شراء محدد ▲' : 'بيع محدد ▼'}</span>
+        <span className="font-mono text-slate-300" dir="ltr">
+          @ <b className="text-white">{fmt(p.limit)}</b> · SL <b className="text-red-300">{fmt(p.stop)}</b> · TP <b className="text-emerald-300">{fmt(p.tp1)}</b> · R:R {p.rr}
+        </span>
+        <span className="font-mono text-slate-500" dir="ltr">حتى {hm(p.expiresAt)} UTC</span>
+      </div>
+      <div className="mt-0.5 text-slate-400">{p.reason.join(' · ')}</div>
+    </div>
+  );
+}
+
 function MomBlock({ analysis }: { analysis: DayAnalysis }) {
   const moms = analysis.momSignals ?? [];
-  if (!moms.length) return null;
+  if (!moms.length) return <PendingBlock analysis={analysis} />;
   return (
     <div className="mt-1.5 rounded-sm border border-orange-400/30 bg-orange-400/5 p-1.5">
       <div className="mb-0.5 text-[9px] font-bold text-orange-300">⚡ محرك الزخم — صفقات استمرار الحركة (BOS + ارتداد 50%)</div>
@@ -40,12 +59,14 @@ function MomBlock({ analysis }: { analysis: DayAnalysis }) {
                   دخول <b className="text-white">{fmt(m.entry)}</b> · وقف <b className="text-red-300">{fmt(m.stop)}</b> · هدف <b className="text-emerald-300">{fmt(m.tp1)}</b>
                 </span>
                 <span className={`font-bold ${m.status === 'active' ? 'text-slate-400' : m.status === 'sl' ? 'text-red-300' : 'text-emerald-300'}`}>{statusTxt}</span>
+                {m.score != null && <span className="font-mono text-[8.5px] text-amber-300/80" dir="ltr">score {m.score}</span>}
               </div>
-              <p className="mt-0.5 text-[8.5px] leading-relaxed text-slate-500">{m.reason[0]} — {m.reason[1]}</p>
+              <p className="mt-0.5 text-[8.5px] leading-relaxed text-slate-500">{m.reason.slice(0, 3).join(' — ')}</p>
             </div>
           );
         })}
       </div>
+      <PendingBlock analysis={analysis} />
     </div>
   );
 }

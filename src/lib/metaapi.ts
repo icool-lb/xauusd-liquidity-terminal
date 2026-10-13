@@ -110,13 +110,15 @@ interface RawCandle {
   low: number;
   close: number;
   volume?: number;
+  tickVolume?: number;
 }
 
 function mapCandle(c: RawCandle): Candle {
   return {
     time: Math.floor(new Date(c.time).getTime() / 1000),
     open: c.open, high: c.high, low: c.low, close: c.close,
-    volume: c.volume ?? 0,
+    // MetaApi تضع حجم التيكات في tickVolume؛ volume الحقيقي صفر غالباً عند وسطاء العقود والفوركس
+    volume: c.tickVolume || c.volume || 0,
   };
 }
 

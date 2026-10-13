@@ -1,0 +1,22 @@
+# ماسح الذهب المجدول — يستدعي /api/scan بعد إغلاق كل شمعة M15 بدقيقتين
+# أضف في GitHub ← Settings ← Secrets and variables ← Actions:
+#   SCAN_URL  = https://<مشروعك>.vercel.app
+#   SCAN_KEY  = نفس قيمة SCAN_KEY في Vercel
+name: gold-scan
+on:
+  schedule:
+    - cron: '2,17,32,47 * * * 0-5'   # الأحد–الجمعة UTC؛ الخادم يتخطّى ساعات إغلاق السوق
+  workflow_dispatch:
+concurrency: { group: gold-scan, cancel-in-progress: false }
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Scan and alert
+        env:
+          SCAN_URL: ${{ secrets.SCAN_URL }}
+          SCAN_KEY: ${{ secrets.SCAN_KEY }}
+        run: |
+          if [ -z "$SCAN_URL" ] || [ -z "$SCAN_KEY" ]; then echo "::warning::SCAN_URL / SCAN_KEY secrets are not set"; exit 0; fi
+          curl -fsS --max-time 60 --retry 2 --retry-delay 5 "${SCAN_URL%/}/api/scan?key=${SCAN_KEY}" | head -c 1500; echo

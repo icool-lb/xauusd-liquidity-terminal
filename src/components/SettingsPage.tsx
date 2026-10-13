@@ -100,10 +100,15 @@ function SignalRulesCard() {
   const [maxSignals, setMaxSignals] = useState(cur.maxSignals);
   const [minRR, setMinRR] = useState(cur.minRR);
   const [openFilter, setOpenFilter] = useState(cur.openFilter);
+  const [sweepVol, setSweepVol] = useState(cur.sweepVol);
+  const [momOn, setMomOn] = useState(cur.momOn);
+  const [momVol, setMomVol] = useState(cur.momVol);
+  const [momBias, setMomBias] = useState(cur.momBias);
+  const [momMinLeg, setMomMinLeg] = useState(cur.momMinLeg);
   const [msg, setMsg] = useState('');
 
   const apply = () => {
-    const cfg: EngineCfg = { maxSignals, minRR, openFilter };
+    const cfg: Partial<EngineCfg> = { maxSignals, minRR, openFilter, sweepVol, momOn, momVol, momBias, momMinLeg };
     setEngineCfg(cfg);
     setMsg('✅ حُفظت القواعد — يُعاد تحميل المنصة…');
     setTimeout(() => location.reload(), 900);
@@ -134,12 +139,85 @@ function SignalRulesCard() {
           <button onClick={() => setOpenFilter(true)} className={chip(openFilter)}>مفعّل (موصى به)</button>
           <button onClick={() => setOpenFilter(false)} className={chip(!openFilter)}>معطّل ⚠</button>
         </div>
+        <div className="mt-1 border-t border-[#2c2c33] pt-2 text-[10px] font-bold text-amber-300">استراتيجية السحب + الحجم</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-32 shrink-0 text-[10px] text-slate-400">حجم شمعة السحب ≥</span>
+          {[0, 1.2, 1.5, 2].map((n) => <button key={n} onClick={() => setSweepVol(n)} className={chip(sweepVol === n)} dir="ltr">{n ? `×${n}` : 'off'}</button>)}
+        </div>
+        <div className="mt-1 border-t border-[#2c2c33] pt-2 text-[10px] font-bold text-orange-300">استراتيجية الزخم (BOS + ارتداد 50%)</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-32 shrink-0 text-[10px] text-slate-400">المحرك</span>
+          <button onClick={() => setMomOn(true)} className={chip(momOn)}>مفعّل</button>
+          <button onClick={() => setMomOn(false)} className={chip(!momOn)}>معطّل</button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-32 shrink-0 text-[10px] text-slate-400">حجم شمعة الكسر ≥</span>
+          {[0, 1.1, 1.3, 1.6].map((n) => <button key={n} onClick={() => setMomVol(n)} className={chip(momVol === n)} dir="ltr">{n ? `×${n}` : 'off'}</button>)}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-32 shrink-0 text-[10px] text-slate-400">مع انحياز الافتتاح فقط</span>
+          <button onClick={() => setMomBias(true)} className={chip(momBias)}>نعم</button>
+          <button onClick={() => setMomBias(false)} className={chip(!momBias)}>لا</button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-32 shrink-0 text-[10px] text-slate-400">أقل موجة كسر $</span>
+          {[6, 8, 10, 12].map((n) => <button key={n} onClick={() => setMomMinLeg(n)} className={chip(momMinLeg === n)} dir="ltr">{n}</button>)}
+        </div>
+        <p className="text-[9px] leading-relaxed text-slate-600">قارن أثر كل خيار على بياناتك قبل الحفظ من لوحة «مختبر السحب والزخم» — إن لم يوفّر وسيطك حجماً يُتخطّى فلتر الحجم تلقائياً.</p>
       </div>
       <div className="mt-2 flex items-center gap-2">
         <button onClick={apply} className="rounded-sm border border-cyan-400/40 px-3 py-1.5 text-[10px] font-bold text-cyan-300 transition hover:bg-cyan-400/10">احفظ القواعد</button>
         <span className="text-[8.5px] text-slate-600">الفرص المرفوضة تظهر دائماً في بطاقة صفقة اليوم مع سبب الرفض</span>
       </div>
       {msg && <p className="mt-1.5 text-[9.5px] text-amber-200/90">{msg}</p>}
+    </div>
+  );
+}
+
+const LS_SCANKEY = 'xau_scan_key';
+function DeskCard() {
+  const [key, setKey] = useState(() => lsGet(LS_SCANKEY));
+  const [out, setOut] = useState('');
+  const [busy, setBusy] = useState(false);
+  const call = async (path: string) => {
+    setBusy(true); setOut('…');
+    try {
+      const r = await fetch(path + (path.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key), { cache: 'no-store' });
+      const j = await r.json().catch(() => ({ ok: false, error: 'HTTP ' + r.status }));
+      if (r.status === 401) setOut('❌ مفتاح الماسح غير مطابق لـ SCAN_KEY في Vercel');
+      else if (path.startsWith('/api/scan')) setOut(j.ok
+        ? (j.skipped ? '🏛️ السوق مغلق الآن — الماسح يتوقف تلقائياً' : `✅ يعمل · ${j.candles} شمعة · آخر شمعة مغلقة ${String(j.lastClosed).slice(11, 16)} UTC · السعر ${j.price} · أحداث الآن: ${(j.events ?? []).length}`)
+        : `❌ ${j.error}`);
+      else setOut(j.ok ? '✅ سُجّل البوت والأوامر — أرسل /status للبوت' : `❌ ${j.error ?? j.webhook ?? 'فشل'}`);
+    } catch { setOut('❌ تعذّر الاتصال بالخادم — هل المنصة منشورة على Vercel؟'); }
+    setBusy(false);
+  };
+  const env = ['METAAPI_TOKEN', 'METAAPI_ACCOUNT_ID', 'METAAPI_SYMBOL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'TELEGRAM_WEBHOOK_SECRET', 'SCAN_KEY', 'ACCOUNT_BALANCE', 'RISK_PCT'];
+  return (
+    <div className="rounded-md border border-orange-400/30 bg-[#1a1a1e] p-3">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+        <h3 className="text-[11px] font-bold text-orange-300">مكتب التداول على الخادم — تنبيهات وصفقات على Telegram 24/5</h3>
+      </div>
+      <p className="mb-2 text-[9.5px] leading-relaxed text-slate-500">
+        يعمل بدون فتح المنصة: كل 15 دقيقة يقرأ آخر شمعة مغلقة من حسابك، يشغّل استراتيجيتي <b className="text-amber-300">السحب + الحجم</b> و<b className="text-orange-300">الزخم</b> بنفس محرّك المنصة،
+        ويرسل كل صفقة أو أمر معلّق مع رأي طاقم الخبراء وقرار المدير وحجم اللوت. البوت يجيب أوامرك: /status /levels /scan /bt /settings /crew.
+      </p>
+      <ol className="mb-2 list-decimal space-y-0.5 pr-4 text-[9.5px] leading-relaxed text-slate-400">
+        <li>أضف في Vercel ← Environment Variables: <span dir="ltr" className="font-mono text-[9px] text-cyan-300">{env.join(' · ')}</span></li>
+        <li>اضغط «تسجيل البوت» أدناه مرة واحدة، ثم أرسل <b dir="ltr">/id</b> للبوت إن لم تعرف Chat ID.</li>
+        <li>الجدولة: ملف <span dir="ltr" className="font-mono">.github/workflows/scan.yml</span> يستدعي الماسح كل 15 دقيقة — يحتاج سرّين في GitHub: <span dir="ltr" className="font-mono">SCAN_URL</span> و<span dir="ltr" className="font-mono">SCAN_KEY</span>.</li>
+      </ol>
+      <label className="mb-2 block text-[10px] text-slate-500">
+        مفتاح الماسح (نفس SCAN_KEY) — يُحفظ في هذا المتصفح فقط
+        <input type="password" value={key} onChange={(e) => { setKey(e.target.value); lsSet(LS_SCANKEY, e.target.value); }} className={inputCls} dir="ltr" />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button disabled={!key || busy} onClick={() => call('/api/scan?dry=1')} className="rounded-sm border border-cyan-400/40 px-3 py-1.5 text-[10px] font-bold text-cyan-300 hover:bg-cyan-400/10 disabled:opacity-40">اختبر الماسح الآن (بلا إرسال)</button>
+        <button disabled={!key || busy} onClick={() => call('/api/scan')} className="rounded-sm border border-orange-400/40 px-3 py-1.5 text-[10px] font-bold text-orange-300 hover:bg-orange-400/10 disabled:opacity-40">افحص وأرسل</button>
+        <button disabled={!key || busy} onClick={() => call('/api/telegram?setup=1')} className="rounded-sm border border-emerald-400/40 px-3 py-1.5 text-[10px] font-bold text-emerald-300 hover:bg-emerald-400/10 disabled:opacity-40">تسجيل البوت</button>
+      </div>
+      {out && <p className="mt-2 text-[10px] leading-relaxed text-slate-300">{out}</p>}
     </div>
   );
 }
@@ -213,7 +291,10 @@ export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus 
       {/* ٤) قواعد الإشارة */}
       <SignalRulesCard />
 
-      {/* ٥) ربط TradingView ← Telegram */}
+      {/* ٥) المكتب الخادمي: ماسح كل 15 دقيقة + بوت Telegram */}
+      <DeskCard />
+
+      {/* ٦) ربط TradingView ← Telegram */}
       <div className="rounded-md border border-[#2c2c33] bg-[#1a1a1e] p-3">
         <div className="mb-2 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />

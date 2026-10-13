@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fold } from './components/Fold';
+import { SweepMomLab } from './components/SweepMomLab';
 import GoldChart from './components/GoldChart';
 import { LevelsPanel, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
 import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
@@ -351,7 +353,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
           <div>
             <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V32</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V33</div>
           </div>
         </div>
         <div className="h-6 w-px bg-[#2c2c33]" />
@@ -474,14 +476,17 @@ export default function App() {
       {/* ===== الجسم ===== */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* العمود الأيمن: الاتصال + المستويات */}
-        <aside className="order-2 w-full shrink-0 space-y-5 border-b border-[#2c2c33] bg-[#131316] p-3 lg:order-1 lg:w-60 lg:border-b-0 lg:border-l lg:overflow-y-auto">
-          <ConnectionPanel
-            creds={creds}
-            status={liveStatus}
-            error={liveError}
-            onSave={(c) => { saveCreds(c); setCreds(c); }}
-            onTest={() => creds && connectLive(creds)}
-          />
+        <aside className="order-2 w-full shrink-0 space-y-2 border-b border-[#2c2c33] bg-[#131316] p-3 lg:order-1 lg:w-64 lg:border-b-0 lg:border-l lg:overflow-y-auto">
+          <Fold id="conn" title="الاتصال بحسابك (MetaApi)" accent="#34d399" defaultOpen={!creds}
+            badge={liveStatus === 'ok' ? '● متصل' : liveStatus === 'loading' ? '…' : liveStatus === 'error' ? '⚠ خطأ' : 'غير متصل'}>
+            <ConnectionPanel
+              creds={creds}
+              status={liveStatus}
+              error={liveError}
+              onSave={(c) => { saveCreds(c); setCreds(c); }}
+              onTest={() => creds && connectLive(creds)}
+            />
+          </Fold>
           {liveStatus === 'ok' && dataInfo && (
             <p dir="ltr" className="rounded-sm bg-emerald-400/5 px-2 py-1 text-center font-mono text-[9.5px] text-emerald-300/80">{dataInfo}</p>
           )}
@@ -505,10 +510,9 @@ export default function App() {
               ))}
             </div>
           </div>
-          {analysis && <LevelsPanel a={analysis} />}
+          {analysis && <Fold id="levels" title="المستويات وقوتها" accent="#fbbf24" defaultOpen badge={analysis.levels.length}><LevelsPanel a={analysis} /></Fold>}
           {/* إعدادات المخاطرة */}
-          <div>
-            <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">الحساب</div>
+          <Fold id="acct" title="الحساب والمخاطرة" accent="#22d3ee" badge={<span dir="ltr">${account.toLocaleString('en-US')} · {riskPct}%</span>}>
             <label className="mb-2 block text-[10px] text-slate-500">
               رأس المال ($)
               <input
@@ -527,7 +531,7 @@ export default function App() {
                 dir="ltr"
               />
             </label>
-          </div>
+          </Fold>
         </aside>
 
         {/* المركز: الشارت + السجل */}
@@ -656,8 +660,14 @@ export default function App() {
         </main>
 
         {/* العمود الأيسر: حاسبة المخاطرة وخبير التوقيت */}
-        <aside className="order-3 w-full shrink-0 space-y-5 border-t border-[#2c2c33] bg-[#131316] p-3 lg:w-72 lg:border-r lg:border-t-0 lg:overflow-y-auto">
+        <aside className="order-3 w-full shrink-0 space-y-2 border-t border-[#2c2c33] bg-[#131316] p-3 lg:w-72 lg:border-r lg:border-t-0 lg:overflow-y-auto">
           <RiskCalc s={sig} account={account} riskPct={riskPct} />
+          {liveStatus === 'ok' && (
+            <Fold id="smlab" title="مختبر السحب والزخم" accent="#f59e0b" badge="قارن الإعدادات">
+              <SweepMomLab candles={labData} />
+            </Fold>
+          )}
+          <Fold id="timing" title="خبير التوقيت المؤسسي" accent="#a78bfa" defaultOpen keep>
           <TimingPanel
             a={analysis}
             wave={wave}
@@ -669,9 +679,13 @@ export default function App() {
             tNow={all.length ? all[all.length - 1].time : Math.floor(Date.now() / 1000)}
             onAlert={crewAlert}
           />
-          {stats && <StatsPanel st={stats} />}
-          {stats && <EquityCurve st={stats} />}
-          {stats && <LevelStats st={stats} />}
+          </Fold>
+          {stats && (
+            <Fold id="perf" title="الأداء والباك-تيست" accent="#34d399" badge={<span dir="ltr">{stats.totalR > 0 ? '+' : ''}{stats.totalR}R · {stats.winRate}%</span>}>
+              <div className="space-y-4"><StatsPanel st={stats} /><EquityCurve st={stats} /><LevelStats st={stats} /></div>
+            </Fold>
+          )}
+          <Fold id="crew" title="طاقم الخبراء" accent="#e879f9">
           <CrewPanel
             a={analysis}
             st={stats}
@@ -684,7 +698,11 @@ export default function App() {
             }}
             wave={wave}
           />
+          </Fold>
+          <Fold id="dev" title="مدير التطوير" accent="#64748b">
           <DevPanel st={stats} whales={whales} newsCount={newsList.filter((e) => e.time + 3600 > Date.now() / 1000).length} conds={conds} />
+          </Fold>
+          <Fold id="news" title="الأخبار الاقتصادية" accent="#f97316" keep badge={newsList.filter((e) => e.time > Date.now() / 1000).length || undefined}>
           <NewsPanel
             candles={all}
             balance={account}
@@ -706,11 +724,16 @@ export default function App() {
               })(),
             } : null}
           />
+          </Fold>
+          <Fold id="whale" title="الحيتان (Databento)" accent="#38bdf8" keep badge={whales.length || undefined}>
           <WhalePanel whales={whales} onAlert={crewAlert} onStatus={setDbOk} />
+          </Fold>
+          <Fold id="dna" title="بصمة الشموع (8 أطر)" accent="#94a3b8">
           <DnaPanel tfs={tfLadder} wave={wave} />
-          {liveStatus === 'ok' && <BtExpertPanel candles={labData} />}
-          {liveStatus === 'ok' && <StratPanel candles={labData} price={lastPrice} />}
-          <SessionPlan />
+          </Fold>
+          {liveStatus === 'ok' && <Fold id="btexp" title="خبير الباك-تيست اليومي" accent="#22c55e"><BtExpertPanel candles={labData} /></Fold>}
+          {liveStatus === 'ok' && <Fold id="strat" title="مختبر استراتيجيات TradingView" accent="#60a5fa"><StratPanel candles={labData} price={lastPrice} /></Fold>}
+          <Fold id="plan" title="خطة الجلسات" accent="#64748b"><SessionPlan /></Fold>
           <p className="rounded-sm border border-[#2c2c33] bg-[#1a1a1e] p-2 text-[9.5px] leading-relaxed text-slate-600">
             بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.
           </p>

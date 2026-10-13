@@ -7,6 +7,7 @@ import {
   type Candle, type DayAnalysis, type EngineCfg, type PendingOrder, type Signal,
 } from '../../src/lib/engine.js';
 import { esc } from './telegram.js';
+import { crew, lotFor as lotCalc, CREW_ROLES, type CrewInput } from '../../src/lib/crew.js';
 
 const DAY = 86400, M15 = 900;
 const f2 = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '—');
@@ -26,8 +27,7 @@ export function risk() {
 // XAUUSD: لوت واحد = 100 أونصة ⇒ حركة 1$ = 100$ للوت
 export function lotFor(stopDist: number) {
   const r = risk();
-  const lot = Math.floor((r.usd / (Math.max(0.5, stopDist) * 100)) * 100) / 100;
-  return { lot, usd: r.usd };
+  return lotCalc(stopDist, r.bal, r.pct);
 }
 
 // الشموع المغلقة فقط: الشمعة الجارية تتغيّر ولا يُبنى عليها تنبيه
@@ -41,39 +41,15 @@ export function today(c: Candle[]): DayAnalysis | null {
   return analyzeDay(c, Math.floor(last / DAY) * DAY);
 }
 
-// ---------------- طاقم الخبراء ----------------
-// كل خبير يحكم على جانب واحد بقاعدة صريحة — لا نصّ مولَّد ولا آراء عائمة
-type Verdict = { who: string; say: string; ok: boolean | null };
-
-function crew(a: DayAnalysis, o: { kind: 'sweep' | 'mom'; side: 'long' | 'short'; entry: number; stop: number; tp1: number; rr: number; volRatio?: number; t: number; label?: string; score?: number }): { lines: Verdict[]; go: boolean } {
-  const long = o.side === 'long';
-  const lines: Verdict[] = [];
-  if (o.kind === 'sweep') {
-    const lv = a.levels.find((l) => l.label === o.label);
-    lines.push({ who: '🧲 خبير السيولة', ok: lv ? lv.strength !== 'weak' : null,
-      say: lv ? `سحب ${esc(lv.label)} — مستوى ${lv.strength === 'strong' ? 'قوي' : lv.strength === 'medium' ? 'متوسط' : 'ضعيف'} (${lv.touches} لمسة)` : 'سحب مستوى سيولة' });
-  } else {
-    lines.push({ who: '⚡ خبير الزخم', ok: true, say: 'كسر هيكلي مع الترند — الدخول على ارتداد 50% لا مطاردة' });
-  }
-  const vr = o.volRatio;
-  lines.push({ who: '📊 خبير الحجم', ok: Number.isFinite(vr as number) ? (vr as number) >= 1.2 : null,
-    say: Number.isFinite(vr as number) ? `الحجم ×${f2(vr as number)} من متوسط 20 شمعة — ${(vr as number) >= 1.5 ? 'مشاركة مؤسسية واضحة' : (vr as number) >= 1.2 ? 'تأكيد مقبول' : 'حجم ضعيف'}` : 'الوسيط لا يوفّر حجماً — بلا تأكيد' });
-  const withOpen = long ? o.entry >= a.open : o.entry <= a.open;
-  lines.push({ who: '🧭 قاعدة الافتتاح', ok: withOpen,
-    say: `الافتتاح ${f2(a.open)} — ${withOpen ? (long ? 'شراء فوق الافتتاح (إيجابي)' : 'بيع تحت الافتتاح (سلبي)') : 'عكس انحياز اليوم ⚠'}` });
-  const sess = sessionOf(o.t), kz = inKillZone(o.t);
-  lines.push({ who: '🕐 خبير التوقيت', ok: sess !== 'asia' && sess !== 'off',
-    say: `${sess === 'london' ? 'جلسة لندن' : sess === 'ny' ? 'جلسة نيويورك' : sess === 'asia' ? 'جلسة آسيا — سيولة أقل' : 'خارج الجلسات'}${kz ? ' · داخل منطقة القتل' : ''}${new Date(o.t * 1000).getUTCDay() === 5 && new Date(o.t * 1000).getUTCHours() >= 17 ? ' · جمعة متأخرة ⚠' : ''}` });
-  const { lot, usd } = lotFor(Math.abs(o.entry - o.stop));
-  lines.push({ who: '🛡 مدير المخاطر', ok: o.rr >= 1.2 && lot >= 0.01,
-    say: `R:R ${f2(o.rr)} · الحجم <b>${lot.toFixed(2)}</b> لوت لمخاطرة $${usd.toFixed(0)} (${risk().pct}%)${lot < 0.01 ? ' — أقل من الحد الأدنى' : ''}` });
-  const no = lines.filter((l) => l.ok === false).length;
-  return { lines, go: no === 0 || (no === 1 && (o.score ?? 0) >= 65) };
+// ---------------- طاقم الخبراء: من src/lib/crew (نفس ما يعرضه السكانر في الواجهة) ----------------
+function crewFor(a: DayAnalysis, o: CrewInput) {
+  const r = risk();
+  return crew(a, o, { balance: r.bal, riskPct: r.pct });
 }
 
 function block(title: string, a: DayAnalysis, s: { kind: 'sweep' | 'mom'; side: 'long' | 'short'; entry: number; stop: number; tp1: number; tp2: number; rr: number; volRatio?: number; t: number; label?: string; score?: number; reason: string[] }, extra = '') {
   const long = s.side === 'long';
-  const c = crew(a, s);
+  const c = crewFor(a, s);
   const head = `${long ? '🟢' : '🔴'} <b>${title}</b> · XAUUSD ${long ? 'شراء' : 'بيع'}`;
   return [
     head,
@@ -83,7 +59,8 @@ function block(title: string, a: DayAnalysis, s: { kind: 'sweep' | 'mom'; side: 
     '',
     ...s.reason.map((r) => '• ' + esc(r)),
     '',
-    ...c.lines.map((l) => `${l.ok === true ? '✅' : l.ok === false ? '⚠️' : '▫️'} ${l.who}: ${l.say}`),
+    ...c.lines.map((l) => `${l.ok === true ? '✅' : l.ok === false ? '⚠️' : '▫️'} ${l.who}: ${esc(l.say)}`),
+    `📦 الحجم المقترح: <b>${c.lot.toFixed(2)}</b> لوت`,
     '',
     c.go ? '👔 <b>المدير: صفقة صالحة</b> — التزم بالوقف ولا تحرّكه' : '👔 <b>المدير: مراقبة فقط</b> — شروط غير مكتملة',
     `<i>${hm(s.t)} UTC · ليست نصيحة مالية</i>`,
@@ -175,14 +152,7 @@ export function cfgText() {
     '', 'للتعديل: متغيّرات Vercel <code>ENGINE_CFG</code> و<code>ACCOUNT_BALANCE</code> و<code>RISK_PCT</code>.'].join('\n');
 }
 
-export const CREW_TEXT = ['👥 <b>طاقم الخبراء</b>',
-  '🧲 خبير السيولة — يقيّم المستوى المسحوب وقوته',
-  '📊 خبير الحجم — يؤكد أن السحب/الكسر بحجم أعلى من المعتاد',
-  '⚡ خبير الزخم — BOS مع الترند ودخول بارتداد 50%',
-  '🧭 قاعدة الافتتاح — فوق الافتتاح إيجابي، تحته سلبي',
-  '🕐 خبير التوقيت — الجلسة ومنطقة القتل وأوقات الحذر',
-  '🛡 مدير المخاطر — اللوت من رأس المال ونسبة المخاطرة و R:R',
-  '👔 المدير — القرار النهائي: صفقة صالحة أم مراقبة'].join('\n');
+export const CREW_TEXT = ['👥 <b>طاقم الخبراء</b>', ...CREW_ROLES.map(([w, d]) => `${w} — ${d}`)].join('\n');
 
 export const HELP_TEXT = ['🤖 <b>أوامر البوت</b>',
   '/status — السعر والانحياز وأقرب سيولة وصفقات اليوم',

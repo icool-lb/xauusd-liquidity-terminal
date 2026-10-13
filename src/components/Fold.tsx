@@ -16,18 +16,18 @@ export function Fold({ id, title, badge, accent = '#94a3b8', defaultOpen = false
   const [open, setOpen] = useState(() => load(id, defaultOpen));
   const toggle = () => { const v = !open; setOpen(v); try { localStorage.setItem(key(id), v ? '1' : '0'); } catch { /* تجاهل */ } };
   return (
-    <section className="rounded-md border border-[#2c2c33] bg-[#16161a]">
+    <section className="rounded-md border border-[#3e3e38] bg-[#2a2a27]">
       <button
         onClick={toggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-2.5 py-2 text-right text-[11px] font-bold transition hover:bg-[#1c1c21]"
+        className="flex w-full items-center gap-2 px-2.5 py-2 text-right text-[11px] font-bold transition hover:bg-[#34342f]"
       >
         <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: accent }} />
         <span className="flex-1 truncate" style={{ color: open ? accent : '#cbd5e1' }}>{title}</span>
         {badge != null && <span className="shrink-0 text-[9.5px] font-normal text-slate-400">{badge}</span>}
         <span className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
       </button>
-      {(open || keep) && <div className="border-t border-[#2c2c33] p-2.5" hidden={!open}>{children}</div>}
+      {(open || keep) && <div className={`border-t border-[#3e3e38] p-2.5 ${open ? '' : 'hidden'}`}>{children}</div>}
     </section>
   );
 }

@@ -17,7 +17,7 @@ import {
 export interface AutoLayers { fvg: boolean; bos: boolean; liq: boolean; sess: boolean; ob: boolean }
 
 const C = {
-  bg: '#0a0a0c', grid: '#101830',
+  bg: '#1f1e1d', grid: '#33322e',
   up: '#34d399', down: '#f87171',
   open: '#22d3ee', asia: '#fbbf24', pd: '#a78bfa',
 };
@@ -50,16 +50,16 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
     const chart = createChart(ref.current, {
       layout: {
         background: { type: ColorType.Solid, color: C.bg },
-        textColor: '#8b98b8',
+        textColor: '#a6a39b',
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 10,
       },
       grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
-      rightPriceScale: { borderColor: '#2c2c33' },
-      timeScale: { borderColor: '#2c2c33', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: '#3e3e38' },
+      timeScale: { borderColor: '#3e3e38', timeVisible: true, secondsVisible: false },
       crosshair: {
-        vertLine: { color: '#3a3a44', labelBackgroundColor: '#2c2c33' },
-        horzLine: { color: '#3a3a44', labelBackgroundColor: '#2c2c33' },
+        vertLine: { color: '#4d4c45', labelBackgroundColor: '#3e3e38' },
+        horzLine: { color: '#4d4c45', labelBackgroundColor: '#3e3e38' },
       },
       handleScroll: { pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
       handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
@@ -145,7 +145,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
           band(t0 + kz.start * 3600, t0 + kz.end * 3600, '#22d3ee', '14');
           const xa = x(t0 + kz.start * 3600);
           if (xa !== null && xa > 0 && xa < W) {
-            ctx.fillStyle = '#8b98b8';
+            ctx.fillStyle = '#a6a39b';
             ctx.font = '9px JetBrains Mono';
             ctx.fillText(kz.label, xa + 3, 12);
           }
@@ -451,7 +451,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
       out.width = W; out.height = H + Math.round(H * 0.07);
       const octx = out.getContext('2d');
       if (!octx) throw new Error('canvas');
-      octx.fillStyle = '#0a0a0c';
+      octx.fillStyle = '#1f1e1d';
       octx.fillRect(0, 0, out.width, out.height);
       octx.drawImage(lib, 0, Math.round(H * 0.07));
       octx.drawImage(ov, 0, Math.round(H * 0.07));
@@ -461,7 +461,7 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
       octx.font = `bold ${Math.round(th * 0.42)}px "JetBrains Mono", monospace`;
       octx.textBaseline = 'middle';
       octx.fillText('XAUUSD — LIQUIDITY TERMINAL', pad, th / 2);
-      octx.fillStyle = '#8b98b8';
+      octx.fillStyle = '#a6a39b';
       octx.font = `${Math.round(th * 0.3)}px "JetBrains Mono", monospace`;
       const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
       octx.fillText(stamp, pad, th / 2 + th * 0.3);
@@ -489,12 +489,12 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
   };
 
   const ctrlBtn =
-    'flex h-7 w-7 items-center justify-center rounded-sm border border-[#3a3a44] bg-[#1a1a1ee6] text-[13px] font-bold text-slate-300 transition hover:border-amber-400/60 hover:text-amber-300 active:scale-90';
+    'flex h-7 w-7 items-center justify-center rounded-sm border border-[#4d4c45] bg-[#30302ee6] text-[13px] font-bold text-slate-300 transition hover:border-amber-400/60 hover:text-amber-300 active:scale-90';
 
   return (
     <div
       ref={ref}
-      className={full ? 'fixed inset-0 z-[100] bg-[#0a0a0c]' : 'relative h-full w-full'}
+      className={full ? 'fixed inset-0 z-[100] bg-[#1f1e1d]' : 'relative h-full w-full'}
       dir="ltr"
     >
       <canvas ref={canvasRef} data-overlay className="pointer-events-none absolute inset-0 z-10" />

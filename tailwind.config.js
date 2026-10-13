@@ -4,7 +4,19 @@ module.exports = {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        display: ["'Noto Naskh Arabic'", "'IBM Plex Sans Arabic'", 'serif'],
+      },
       colors: {
+        // لمسات Claude: رماديات دافئة وطين (terracotta) بدل الرمادي المزرق والكهرماني
+        slate: {
+          50: '#faf9f5', 100: '#f5f4ee', 200: '#e8e6dc', 300: '#d6d3c8', 400: '#b0aea5',
+          500: '#8f8c84', 600: '#6f6c65', 700: '#4d4c45', 800: '#34342f', 900: '#262624', 950: '#1f1e1d',
+        },
+        amber: {
+          50: '#fdf3ee', 100: '#fae3d8', 200: '#f4c4ae', 300: '#eba083', 400: '#d97757',
+          500: '#c96442', 600: '#ae5233', 700: '#8c412a', 800: '#6d3322', 900: '#4d2418', 950: '#2e150e',
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

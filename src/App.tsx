@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Fold } from './components/Fold';
 import { SweepMomLab } from './components/SweepMomLab';
+import { ScannerPanel } from './components/ScannerPanel';
 import GoldChart from './components/GoldChart';
 import { LevelsPanel, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
 import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
@@ -17,7 +18,7 @@ import { runStrategyLab, mergedPlan } from './lib/strategies';
 import { buildTfLadder, buildWave, waveSpeech } from './lib/dna';
 import { unlockAudio, setVoice, beep as beepLib, speak, signalChime } from './lib/audio';
 import {
-  analyzeDay, backtestFull, sessionOf, inKillZone, aggregate, detectWhales, analyzeConditions, getSessionWindows,
+  analyzeDay, backtestFull, sessionOf, inKillZone, aggregate, detectWhales, analyzeConditions,
   type Candle, type DayAnalysis, type NewsEvent,
 } from './lib/engine';
 import {
@@ -37,7 +38,9 @@ const sessionColor: Record<string, string> = {
 
 export default function App() {
   // ---- بيانات حقيقية فقط (MetaApi) ----
-  const [chartView, setChartView] = useState<'engine' | 'tv' | 'settings'>('engine');
+  type Tab = 'desk' | 'lab' | 'crew' | 'tv' | 'settings';
+  const [tab, setTabRaw] = useState<Tab>(() => { try { const t = localStorage.getItem('xau_tab') as Tab | null; return t && ['desk', 'lab', 'crew', 'tv', 'settings'].includes(t) ? t : 'desk'; } catch { return 'desk'; } });
+  const setTab = (t: Tab) => { setTabRaw(t); try { localStorage.setItem('xau_tab', t); } catch { /* تجاهل */ } };
   const [creds, setCreds] = useState<MetaApiCreds | null>(() => loadCreds());
   const [liveStatus, setLiveStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [liveError, setLiveError] = useState('');
@@ -345,92 +348,76 @@ export default function App() {
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const tabs = [
+    ['desk', 'المكتب'], ['lab', 'المختبر'], ['crew', 'الخبراء والأخبار'], ['tv', 'TradingView'], ['settings', 'الإعدادات'],
+  ] as const;
+  const biasTxt = analysis ? (analysis.bias === 'bullish' ? '▲ فوق الافتتاح' : analysis.bias === 'bearish' ? '▼ تحت الافتتاح' : '● حول الافتتاح') : '';
+  const biasCls = analysis?.bias === 'bullish' ? 'bg-emerald-400/10 text-emerald-300' : analysis?.bias === 'bearish' ? 'bg-red-400/10 text-red-300' : 'bg-slate-400/10 text-slate-300';
+  const card = 'rounded-2xl border border-[#3e3e38] bg-[#262624]';
+
   return (
-    <div dir="rtl" className="flex h-screen flex-col bg-[#0a0a0c] text-slate-200 scanlines">
+    <div dir="rtl" className="flex h-screen flex-col bg-[#1f1e1d] text-slate-200">
       {/* ===== الرأس ===== */}
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#2c2c33] bg-[#131316] px-4 py-1.5">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-amber-400/15 font-black text-amber-300">Au</div>
+      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#3e3e38] bg-[#1f1e1d] px-4 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400 font-display text-[15px] font-bold text-[#1f1e1d]">Au</div>
           <div>
-            <div className="text-[13px] font-black leading-none text-white">منصة سيولة الذهب</div>
-            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-slate-500" dir="ltr">XAUUSD · LIQUIDITY TERMINAL · V33</div>
+            <div className="font-display text-[17px] font-bold leading-none text-slate-50">منصة سيولة الذهب</div>
+            <div className="mt-1 text-[10px] text-slate-500"><span dir="ltr">XAUUSD · V34</span> · السحب والحجم · الزخم</div>
           </div>
         </div>
-        <div className="h-6 w-px bg-[#2c2c33]" />
         <div dir="ltr" className="flex items-baseline gap-2 font-mono">
-          <span className="text-lg font-black text-white">{lastPrice ? fmt(lastPrice) : '—'}</span>
-          {lastPrice > 0 && (
-            <span className={`text-[11px] font-bold ${delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(2)}
-            </span>
-          )}
+          <span className="text-[22px] font-bold text-slate-50">{lastPrice ? fmt(lastPrice) : '—'}</span>
+          {lastPrice > 0 && <span className={`text-[12px] font-bold ${delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(2)}</span>}
         </div>
-        <span className={`flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-bold ${sessionColor[curSession]}`}>
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
-          {sessionLabel[curSession]}
-          {curSession !== 'off' && (
-            <span className="font-mono text-[8px] font-normal opacity-70" dir="ltr">
-              {(() => { const w = getSessionWindows(); const hm = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`; const [s, e] = curSession === 'asia' ? [w.asiaStart, w.asiaEnd] : curSession === 'london' ? [w.londonStart, w.londonEnd] : [w.nyStart, w.nyEnd]; return `${hm(s)}-${hm(e)} UTC`; })()}
-            </span>
-          )}
+        {analysis && <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${biasCls}`}>{biasTxt}</span>}
+        <span className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold ${sessionColor[curSession]}`}>
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />{sessionLabel[curSession]}
         </span>
-        {inKillZone(Math.floor(Date.now() / 1000)) && (
-          <span className="rounded-sm border border-red-400/50 bg-red-400/10 px-2 py-0.5 text-[10px] font-black text-red-300 animate-pulse">
-            ⚡ منطقة قتل نشطة
+        {inKillZone(Math.floor(Date.now() / 1000)) && <span className="rounded-full bg-amber-400/15 px-3 py-1 text-[11px] font-bold text-amber-300">⚡ منطقة قتل</span>}
+        <div className="mr-auto flex items-center gap-2">
+          <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-bold ${liveStatus === 'ok' ? 'bg-emerald-400/10 text-emerald-300' : liveStatus === 'loading' ? 'bg-slate-400/10 text-slate-300' : 'bg-red-400/10 text-red-300'}`}>
+            {liveStatus === 'ok' ? '● مباشر' : liveStatus === 'loading' ? '… اتصال' : liveStatus === 'error' ? '⚠ خطأ اتصال' : '○ غير متصل'}
           </span>
-        )}
-        {liveStatus === 'ok' && (
-          <span className="flex items-center gap-1.5 rounded-sm border border-emerald-400/40 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
-            بيانات حقيقية · مباشر
-          </span>
-        )}
-
-        <div className="mr-auto flex items-center gap-3">
-          <button
-            onClick={() => setSoundOn((v) => !v)}
-            title="تنبيه نغمة عند الإشارات"
-            className={`rounded-sm border px-2 py-1 text-[11px] transition ${soundOn ? 'border-amber-400/40 text-amber-300' : 'border-[#3a3a44] text-slate-600'}`}
-          >
-            {soundOn ? '🔔' : '🔕'}
-          </button>
-          <button
-            onClick={() => { const nv = !voiceOn; setVoiceOn(nv); setVoice(nv); }}
-            title="إعلام صوتي منطوق بالعربية"
-            className={`rounded-sm border px-2 py-1 text-[11px] transition ${voiceOn ? 'border-emerald-400/40 text-emerald-300' : 'border-[#3a3a44] text-slate-600'}`}
-          >
-            {voiceOn ? '🗣' : '🤐'}
-          </button>
-          <button
-            onClick={() => { unlockAudio(); beepLib(880); setTimeout(() => beepLib(1174), 250); speak('الصوت يعمل يا بطل'); }}
-            title="اختبار الصوت والنطق"
-            className="rounded-sm border border-[#3a3a44] px-2 py-1 text-[11px] text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-300"
-          >
-            🔊
-          </button>
-          <span dir="ltr" className="font-mono text-[11px] text-slate-400">
-            {clock.toISOString().slice(11, 19)} <span className="text-slate-600">UTC</span>
-          </span>
+          <button onClick={() => setSoundOn((v) => !v)} title="تنبيه نغمة" className={`rounded-full px-2 py-1 text-[12px] ${soundOn ? 'bg-amber-400/15' : 'opacity-50'}`}>{soundOn ? '🔔' : '🔕'}</button>
+          <button onClick={() => { const nv = !voiceOn; setVoiceOn(nv); setVoice(nv); }} title="نطق عربي" className={`rounded-full px-2 py-1 text-[12px] ${voiceOn ? 'bg-amber-400/15' : 'opacity-50'}`}>{voiceOn ? '🗣' : '🤐'}</button>
+          <button onClick={() => { unlockAudio(); beepLib(880); setTimeout(() => beepLib(1174), 250); speak('الصوت يعمل'); }} title="اختبار الصوت" className="rounded-full px-2 py-1 text-[12px] hover:bg-[#30302e]">🔊</button>
+          <span dir="ltr" className="font-mono text-[11px] text-slate-500">{clock.toISOString().slice(11, 19)} UTC</span>
         </div>
       </header>
 
-      {/* ===== شريط خارطة الطريق: التوجه + أرقام الاختبار + تأكيد Databento ===== */}
-      {liveStatus === 'ok' && (
-        <RoadmapStrip
-          price={lastPrice}
-          roadmap={roadmap}
-          archive={archiveMode}
-          hasDbKey={!!loadDbKey()}
-          dbConfirm={dbConfirm}
-        />
+      {/* ===== التبويبات ===== */}
+      <nav className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-[#3e3e38] bg-[#1f1e1d] px-3">
+        {tabs.map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)}
+            className={`relative shrink-0 px-3.5 py-2.5 text-[12.5px] font-bold transition ${tab === k ? 'text-amber-300' : 'text-slate-400 hover:text-slate-200'}`}>
+            {l}
+            {tab === k && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-amber-400" />}
+          </button>
+        ))}
+        {liveStatus === 'ok' && dataInfo && <span dir="ltr" className="mr-auto shrink-0 font-mono text-[10px] text-slate-500">{dataInfo}</span>}
+      </nav>
+
+      {toast && (
+        <div className="absolute left-1/2 top-24 z-50 max-w-[92vw] -translate-x-1/2 rounded-2xl border border-amber-400/40 bg-[#30302e] px-4 py-2.5 text-[12.5px] font-bold text-amber-200 shadow-[0_8px_40px_rgba(0,0,0,0.45)]">
+          {toast}
+        </div>
       )}
 
-      {/* ===== بطاقة صفقة اليوم: الاتجاه + الأرقام + السبب + النتيجة ===== */}
-      {liveStatus === 'ok' && <SignalCard analysis={analysis} price={dayOffset === 0 ? lastPrice : (analysis?.lastPrice ?? lastPrice)} />}
-
-      {/* ===== شريط المستويات ===== */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* ===== المكتب: يبقى مركّباً دائماً (الشارت والتنبيهات تعمل في الخلفية) ===== */}
+        <div className={tab === 'desk' ? '' : 'hidden'}>
+          {liveStatus === 'ok' && <RoadmapStrip price={lastPrice} roadmap={roadmap} archive={archiveMode} hasDbKey={!!loadDbKey()} dbConfirm={dbConfirm} />}
+          {liveStatus === 'ok' && (
+            <div className="mx-3 mt-3">
+              <Fold id="today" title="صفقة اليوم — الخطة والأسباب والنتيجة" accent="#d97757" defaultOpen
+                badge={sig ? <span className={sig.side === 'long' ? 'text-emerald-300' : 'text-red-300'}>{sig.side === 'long' ? '▲ شراء' : '▼ بيع'} {sig.status === 'active' ? '· نشطة' : sig.status === 'sl' ? '· وقف' : '· هدف'}</span> : 'لا صفقة بعد'}>
+                <SignalCard analysis={analysis} price={dayOffset === 0 ? lastPrice : (analysis?.lastPrice ?? lastPrice)} />
+              </Fold>
+            </div>
+          )}
       {analysis && (
-        <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-[#2c2c33] bg-[#070b14] px-4 py-1.5 text-[10px]">
+        <div className="mx-3 mt-3 flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-[#3e3e38] bg-[#262624] px-3 py-2 text-[10.5px]">
           {([
             ['قمة الأمس', analysis.pdh, 'text-violet-300'],
             ['ق لندن', analysis.londonHigh, 'text-cyan-200'],
@@ -443,7 +430,7 @@ export default function App() {
             ['إغلاق نيويورك أمس', analysis.prevNyClose, 'text-orange-300'],
             ['قاع الأمس', analysis.pdl, 'text-violet-300'],
           ] as [string, number, string][]).filter(([, v]) => Number.isFinite(v)).map(([l, v, c], i) => (
-            <div key={i} className="flex shrink-0 items-center gap-1.5 rounded-sm bg-[#1a1a1e] px-2.5 py-1">
+            <div key={i} className="flex shrink-0 items-center gap-1.5 rounded-sm bg-[#30302e] px-2.5 py-1">
               <span className="text-slate-500">{l}</span>
               <span dir="ltr" className={`font-mono font-bold ${c}`}>{fmt(v)}</span>
             </div>
@@ -461,122 +448,33 @@ export default function App() {
         </div>
       )}
 
-      {/* ===== الخط الزمني للجلسات ===== */}
-      <div className="shrink-0 border-b border-[#2c2c33] bg-[#0a0a0c] px-4">
-        <SessionTimeline />
-      </div>
+          <div className="grid gap-3 p-3 lg:grid-cols-[340px_minmax(0,1fr)_290px]">
+            {/* السكانر */}
+            <aside className="order-2 space-y-3 lg:order-1">
+              {liveStatus !== 'ok' && (
+                <div className={`${card} p-3`}>
+                  <ConnectionPanel creds={creds} status={liveStatus} error={liveError}
+                    onSave={(c) => { saveCreds(c); setCreds(c); }} onTest={() => creds && connectLive(creds)} />
+                </div>
+              )}
+              {priceWarn && <p className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-2.5 text-[11px] leading-relaxed text-amber-200">{priceWarn}</p>}
+              <ScannerPanel all={all} account={account} riskPct={riskPct} live={liveStatus === 'ok'} />
+            </aside>
 
-      {/* ===== تنبيه الإشارة ===== */}
-      {toast && (
-        <div className="absolute left-1/2 top-14 z-50 -translate-x-1/2 rounded-md border border-amber-400/60 bg-[#1a1a1e] px-4 py-2 text-[12px] font-bold text-amber-300 shadow-[0_0_30px_rgba(251,191,36,0.25)]">
-          ⚡ {toast}
-        </div>
-      )}
-
-      {/* ===== الجسم ===== */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        {/* العمود الأيمن: الاتصال + المستويات */}
-        <aside className="order-2 w-full shrink-0 space-y-2 border-b border-[#2c2c33] bg-[#131316] p-3 lg:order-1 lg:w-64 lg:border-b-0 lg:border-l lg:overflow-y-auto">
-          <Fold id="conn" title="الاتصال بحسابك (MetaApi)" accent="#34d399" defaultOpen={!creds}
-            badge={liveStatus === 'ok' ? '● متصل' : liveStatus === 'loading' ? '…' : liveStatus === 'error' ? '⚠ خطأ' : 'غير متصل'}>
-            <ConnectionPanel
-              creds={creds}
-              status={liveStatus}
-              error={liveError}
-              onSave={(c) => { saveCreds(c); setCreds(c); }}
-              onTest={() => creds && connectLive(creds)}
-            />
-          </Fold>
-          {liveStatus === 'ok' && dataInfo && (
-            <p dir="ltr" className="rounded-sm bg-emerald-400/5 px-2 py-1 text-center font-mono text-[9.5px] text-emerald-300/80">{dataInfo}</p>
-          )}
-          {priceWarn && (
-            <p className="rounded-sm border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-[10px] leading-relaxed text-amber-300">{priceWarn}</p>
-          )}
-          {/* اختيار اليوم */}
-          <div>
-            <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">يوم التحليل</div>
-            <div className="grid grid-cols-5 gap-1">
-              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setDayOffset(d)}
-                  className={`rounded-sm py-1 font-mono text-[10px] font-bold transition ${
-                    dayOffset === d ? 'bg-amber-400 text-black' : 'bg-[#1a1a1e] text-slate-400 hover:bg-[#232329]'
-                  }`}
-                >
-                  {d === 0 ? 'اليوم' : `-${d}`}
-                </button>
-              ))}
-            </div>
-          </div>
-          {analysis && <Fold id="levels" title="المستويات وقوتها" accent="#fbbf24" defaultOpen badge={analysis.levels.length}><LevelsPanel a={analysis} /></Fold>}
-          {/* إعدادات المخاطرة */}
-          <Fold id="acct" title="الحساب والمخاطرة" accent="#22d3ee" badge={<span dir="ltr">${account.toLocaleString('en-US')} · {riskPct}%</span>}>
-            <label className="mb-2 block text-[10px] text-slate-500">
-              رأس المال ($)
-              <input
-                type="number" value={account} min={100} step={100}
-                onChange={(e) => setAccount(Number(e.target.value) || 0)}
-                className="mt-1 w-full rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-2 py-1 font-mono text-[11px] text-white outline-none focus:border-amber-400/50"
-                dir="ltr"
-              />
-            </label>
-            <label className="block text-[10px] text-slate-500">
-              المخاطرة لكل صفقة %
-              <input
-                type="number" value={riskPct} min={0.25} max={5} step={0.25}
-                onChange={(e) => setRiskPct(Number(e.target.value) || 1)}
-                className="mt-1 w-full rounded-sm border border-[#2c2c33] bg-[#1a1a1e] px-2 py-1 font-mono text-[11px] text-white outline-none focus:border-amber-400/50"
-                dir="ltr"
-              />
-            </label>
-          </Fold>
-        </aside>
-
-        {/* المركز: الشارت + السجل */}
-        <main className="order-1 flex min-h-[520px] min-w-0 flex-1 flex-col lg:order-2 lg:min-h-0">
-          <div className="flex shrink-0 flex-wrap items-center gap-1 px-3 pt-2 text-[10px] font-bold">
-            <button
-              onClick={() => setChartView('engine')}
-              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'engine' ? 'bg-[#232329] text-amber-300' : 'text-slate-500 hover:text-white'}`}
-            >
-              شارت التحليل
-            </button>
-            <button
-              onClick={() => setChartView('tv')}
-              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'tv' ? 'bg-[#232329] text-amber-300' : 'text-slate-500 hover:text-white'}`}
-            >
-              TradingView مباشر
-            </button>
-            <button
-              onClick={() => setChartView('settings')}
-              className={`rounded-sm px-2.5 py-1 transition ${chartView === 'settings' ? 'bg-[#232329] text-amber-300' : 'text-slate-500 hover:text-white'}`}
-            >
-              ⚙️ الإعدادات
-            </button>
-            {/* مبدّل الفريمات */}
-            {chartView === 'engine' && (
-              <div dir="ltr" className="flex rounded-sm border border-[#3a3a44] p-0.5 font-mono text-[9px]">
-                {[[300, '5m'], [900, '15m'], [1800, '30m'], [3600, '1H'], [14400, '4H'], [86400, '1D']].map(([s, l]) => (
-                  <button
-                    key={s}
-                    onClick={() => setTf(s as number)}
-                    className={`rounded-sm px-1.5 py-0.5 transition ${tf === s ? 'bg-cyan-400/20 text-cyan-300' : 'text-slate-500 hover:text-white'}`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-            )}
-            {liveStatus === 'ok' && dataInfo && (
-              <span dir="ltr" className="mr-auto rounded-sm bg-emerald-400/10 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-300">{dataInfo}</span>
-            )}
-          </div>
-          {/* شريط الطبقات التلقائية */}
-          {chartView === 'engine' && (
-            <div className="shrink-0 px-3 pt-1.5">
-              <div className="flex items-center gap-1 overflow-x-auto text-[9.5px] font-bold">
+            {/* الشارت */}
+            <main className={`order-1 min-w-0 ${card} p-2 lg:order-2`}>
+              <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
+                <div dir="ltr" className="flex rounded-xl bg-[#30302e] p-0.5 font-mono text-[10.5px]">
+                  {[[300, '5m'], [900, '15m'], [1800, '30m'], [3600, '1H'], [14400, '4H'], [86400, '1D']].map(([sec, l]) => (
+                    <button key={sec} onClick={() => setTf(sec as number)}
+                      className={`rounded-lg px-2 py-1 transition ${tf === sec ? 'bg-amber-400 text-[#1f1e1d]' : 'text-slate-400 hover:text-slate-100'}`}>{l}</button>
+                  ))}
+                </div>
+                <select value={dayOffset} onChange={(e) => setDayOffset(Number(e.target.value))}
+                  className="rounded-xl border border-[#3e3e38] bg-[#30302e] px-2 py-1 text-[11px] text-slate-200 outline-none">
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => <option key={d} value={d}>{d === 0 ? 'اليوم' : `قبل ${d} يوم`}</option>)}
+                </select>
+                <div className="flex items-center gap-1 overflow-x-auto text-[10px] font-bold">
                 <span className="shrink-0 text-slate-500">كشف تلقائي:</span>
                 {([
                   ['fvg', 'FVG', '#64748b'],
@@ -588,9 +486,9 @@ export default function App() {
                   <button
                     key={k}
                     onClick={() => setLayers((s) => ({ ...s, [k]: !s[k] }))}
-                    className="shrink-0 rounded-sm border px-2 py-1 transition active:scale-95"
+                    className="shrink-0 rounded-full border px-2.5 py-1 transition active:scale-95"
                     style={{
-                      borderColor: layers[k] ? col : '#2c2c33',
+                      borderColor: layers[k] ? col : '#3e3e38',
                       color: layers[k] ? col : '#64748b',
                       background: layers[k] ? col + '18' : 'transparent',
                     }}
@@ -598,95 +496,74 @@ export default function App() {
                     {layers[k] ? '◉ ' : '○ '}{label}
                   </button>
                 ))}
+                </div>
               </div>
-            </div>
-          )}
-          {/* وضع العطلة: عمل الخبراء على الأرشيف */}
-          {liveStatus === 'ok' && archiveMode && (
-            <div className="mx-3 mt-1.5 shrink-0 rounded-sm border border-cyan-400/40 bg-cyan-400/10 px-2 py-1 text-[10px] leading-relaxed text-cyan-200">
-              🏛️ البورصة مغلقة والبيانات الحية متوقفة — وضع الأرشيف نشط: خبير الباك-تيست ومختبر الاستراتيجيات ومحلل الشروط يعملون على {btData.length.toLocaleString('en-US')} شمعة أرشيفية (~{Math.round(btData.length / 96)} يوماً) لتطوير المنصة حتى أيام العطلة.
-            </div>
-          )}
-          {/* تحذير البيانات الراكدة */}
-          {liveStatus === 'ok' && dataStale && (
-            <div className="mx-3 mt-1.5 shrink-0 rounded-sm border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] leading-relaxed text-amber-300">
-              ⚠️ بيانات حسابك تتوقف عند {new Date(lastDataDay * 1000).toISOString().slice(0, 10)} — اضغط «حفظ واتصال» لإعادة الجلب، وإن استمرت المشكلة فتأكد أن الحساب يعمل (DEPLOYED) وأن الوسيط يوفّر بيانات الرمز.
-            </div>
-          )}
-          <div className="min-h-0 flex-1 p-2">
-            <div className="relative h-full overflow-hidden rounded-md border border-[#2c2c33] bg-[#0a0a0c] p-1">
-              {chartView === 'settings' ? (
-                <SettingsPage
-                  creds={creds}
-                  status={liveStatus}
-                  error={liveError}
-                  onSave={(c) => { saveCreds(c); setCreds(c); }}
-                  onTest={() => creds && connectLive(creds)}
-                  onDbStatus={setDbOk}
-                />
-              ) : chartView === 'engine' ? (
-                liveStatus !== 'ok' ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+
+              {liveStatus === 'ok' && archiveMode && (
+                <div className="mb-2 rounded-xl bg-cyan-400/10 px-3 py-1.5 text-[11px] text-cyan-200">🏛️ السوق مغلق — الخبراء يعملون على الأرشيف ({btData.length.toLocaleString('en-US')} شمعة).</div>
+              )}
+              {liveStatus === 'ok' && dataStale && (
+                <div className="mb-2 rounded-xl bg-amber-400/10 px-3 py-1.5 text-[11px] text-amber-200">⚠️ بيانات حسابك تتوقف عند {new Date(lastDataDay * 1000).toISOString().slice(0, 10)} — أعد الاتصال من الإعدادات.</div>
+              )}
+              <div className="relative h-[62vh] min-h-[380px] overflow-hidden rounded-xl bg-[#1f1e1d]">
+                {liveStatus !== 'ok' ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
                     {liveStatus === 'loading' && <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />}
-                    <p className="max-w-sm text-[12px] leading-relaxed text-slate-400">
+                    <p className="max-w-sm text-[12.5px] leading-relaxed text-slate-400">
                       {liveStatus === 'loading' && 'جارٍ الاتصال بحسابك عبر MetaApi وسحب 30 يوماً من شموع الذهب…'}
-                      {liveStatus === 'idle' && 'أدخل بيانات MetaApi في اللوحة الجانبية (API Token + Account ID + الرمز) ثم اضغط «حفظ واتصال»'}
+                      {liveStatus === 'idle' && 'أدخل بيانات MetaApi في لوحة الاتصال بجانب السكانر ثم اضغط «حفظ واتصال».'}
                       {liveStatus === 'error' && liveError}
                     </p>
                   </div>
                 ) : (
-                  <GoldChart
-                    candles={chartAnalysis?.candles ?? []}
-                    analysis={chartAnalysis}
-                    showAll={displayCandles}
-                    tfSeconds={tf}
-                    layers={layers}
-                    fallback={analysis == null && chartAnalysis != null}
-                  />
-                )
-              ) : (
-                <iframe
-                  title="TradingView XAUUSD"
-                  src="https://www.tradingview.com/widgetembed/?symbol=OANDA%3AXAUUSD&interval=15&theme=dark&style=1&locale=ar&timezone=Etc%2FUTC&hide_side_toolbar=0&allow_symbol_change=1&withdateranges=1&studies=%5B%5D"
-                  className="h-full w-full border-0"
-                  dir="ltr"
-                />
-              )}
-            </div>
-          </div>
-          <div className="shrink-0 border-t border-[#2c2c33] bg-[#131316] px-4 py-3">
-            {analysis && <EventsLog a={analysis} />}
-          </div>
-        </main>
+                  <GoldChart candles={chartAnalysis?.candles ?? []} analysis={chartAnalysis} showAll={displayCandles}
+                    tfSeconds={tf} layers={layers} fallback={analysis == null && chartAnalysis != null} />
+                )}
+              </div>
+              <div className="px-2 pb-1 pt-3">
+                <SessionTimeline />
+                {analysis && <div className="mt-2"><EventsLog a={analysis} /></div>}
+              </div>
+            </main>
 
-        {/* العمود الأيسر: حاسبة المخاطرة وخبير التوقيت */}
-        <aside className="order-3 w-full shrink-0 space-y-2 border-t border-[#2c2c33] bg-[#131316] p-3 lg:w-72 lg:border-r lg:border-t-0 lg:overflow-y-auto">
-          <RiskCalc s={sig} account={account} riskPct={riskPct} />
-          {liveStatus === 'ok' && (
-            <Fold id="smlab" title="مختبر السحب والزخم" accent="#f59e0b" badge="قارن الإعدادات">
-              <SweepMomLab candles={labData} />
-            </Fold>
-          )}
-          <Fold id="timing" title="خبير التوقيت المؤسسي" accent="#a78bfa" defaultOpen keep>
-          <TimingPanel
-            a={analysis}
-            wave={wave}
-            ladder={tfLadder}
-            dbConfirm={dbConfirm}
-            news={newsList}
-            account={account}
-            riskPct={riskPct}
-            tNow={all.length ? all[all.length - 1].time : Math.floor(Date.now() / 1000)}
-            onAlert={crewAlert}
-          />
-          </Fold>
-          {stats && (
-            <Fold id="perf" title="الأداء والباك-تيست" accent="#34d399" badge={<span dir="ltr">{stats.totalR > 0 ? '+' : ''}{stats.totalR}R · {stats.winRate}%</span>}>
-              <div className="space-y-4"><StatsPanel st={stats} /><EquityCurve st={stats} /><LevelStats st={stats} /></div>
-            </Fold>
-          )}
-          <Fold id="crew" title="طاقم الخبراء" accent="#e879f9">
-          <CrewPanel
+            {/* المخاطرة والمستويات والتوقيت */}
+            <aside className="order-3 space-y-3">
+              <div className={`${card} p-3`}><RiskCalc s={sig} account={account} riskPct={riskPct} /></div>
+              <Fold id="acct" title="الحساب والمخاطرة" accent="#d97757" badge={<span dir="ltr">${account.toLocaleString('en-US')} · {riskPct}%</span>}>
+                <label className="mb-2 block text-[11px] text-slate-400">رأس المال ($)
+                  <input type="number" value={account} min={100} step={100} onChange={(e) => setAccount(Number(e.target.value) || 0)} dir="ltr"
+                    className="mt-1 w-full rounded-lg border border-[#3e3e38] bg-[#30302e] px-2 py-1.5 font-mono text-[12px] text-slate-100 outline-none focus:border-amber-400/60" />
+                </label>
+                <label className="block text-[11px] text-slate-400">المخاطرة لكل صفقة %
+                  <input type="number" value={riskPct} min={0.25} max={5} step={0.25} onChange={(e) => setRiskPct(Number(e.target.value) || 1)} dir="ltr"
+                    className="mt-1 w-full rounded-lg border border-[#3e3e38] bg-[#30302e] px-2 py-1.5 font-mono text-[12px] text-slate-100 outline-none focus:border-amber-400/60" />
+                </label>
+              </Fold>
+              {analysis && <Fold id="levels" title="المستويات وقوتها" accent="#d97757" badge={analysis.levels.length}><LevelsPanel a={analysis} /></Fold>}
+              <Fold id="timing" title="خبير التوقيت المؤسسي" accent="#a78bfa" keep>
+                <TimingPanel a={analysis} wave={wave} ladder={tfLadder} dbConfirm={dbConfirm} news={newsList} account={account} riskPct={riskPct}
+                  tNow={all.length ? all[all.length - 1].time : Math.floor(Date.now() / 1000)} onAlert={crewAlert} />
+              </Fold>
+            </aside>
+          </div>
+        </div>
+
+        {/* ===== المختبر: يُحسب عند الفتح فقط ===== */}
+        {tab === 'lab' && (
+          <div className="grid gap-3 p-3 lg:grid-cols-2">
+            {liveStatus !== 'ok' && <p className="text-[12px] text-slate-400">اتصل بحسابك أولاً — المختبر يعمل على بياناتك الحقيقية.</p>}
+            {liveStatus === 'ok' && <section className={`${card} p-4 lg:col-span-2`}><h3 className="font-display mb-2 text-[16px] font-bold text-slate-50">مختبر السحب والزخم</h3><SweepMomLab candles={labData} /></section>}
+            {stats && <section className={`${card} space-y-4 p-4`}><h3 className="font-display text-[16px] font-bold text-slate-50">الأداء والباك-تيست</h3><StatsPanel st={stats} /><EquityCurve st={stats} /><LevelStats st={stats} /></section>}
+            {liveStatus === 'ok' && <section className={`${card} p-4`}><BtExpertPanel candles={labData} /></section>}
+            {liveStatus === 'ok' && <section className={`${card} p-4 lg:col-span-2`}><StratPanel candles={labData} price={lastPrice} /></section>}
+          </div>
+        )}
+
+        {/* ===== الخبراء والأخبار: الأخبار والحيتان تبقى مركّبة لأنها تُطلق التنبيهات ===== */}
+        <div className={`${tab === 'crew' ? 'grid' : 'hidden'} gap-3 p-3 lg:grid-cols-2`}>
+          {tab === 'crew' && (
+            <section className={`${card} p-4`}>
+              <CrewPanel
             a={analysis}
             st={stats}
             lastCandleTime={all.length ? all[all.length - 1].time : 0}
@@ -698,11 +575,9 @@ export default function App() {
             }}
             wave={wave}
           />
-          </Fold>
-          <Fold id="dev" title="مدير التطوير" accent="#64748b">
-          <DevPanel st={stats} whales={whales} newsCount={newsList.filter((e) => e.time + 3600 > Date.now() / 1000).length} conds={conds} />
-          </Fold>
-          <Fold id="news" title="الأخبار الاقتصادية" accent="#f97316" keep badge={newsList.filter((e) => e.time > Date.now() / 1000).length || undefined}>
+            </section>
+          )}
+          <section className={`${card} p-4`}>
           <NewsPanel
             candles={all}
             balance={account}
@@ -724,20 +599,28 @@ export default function App() {
               })(),
             } : null}
           />
-          </Fold>
-          <Fold id="whale" title="الحيتان (Databento)" accent="#38bdf8" keep badge={whales.length || undefined}>
-          <WhalePanel whales={whales} onAlert={crewAlert} onStatus={setDbOk} />
-          </Fold>
-          <Fold id="dna" title="بصمة الشموع (8 أطر)" accent="#94a3b8">
-          <DnaPanel tfs={tfLadder} wave={wave} />
-          </Fold>
-          {liveStatus === 'ok' && <Fold id="btexp" title="خبير الباك-تيست اليومي" accent="#22c55e"><BtExpertPanel candles={labData} /></Fold>}
-          {liveStatus === 'ok' && <Fold id="strat" title="مختبر استراتيجيات TradingView" accent="#60a5fa"><StratPanel candles={labData} price={lastPrice} /></Fold>}
-          <Fold id="plan" title="خطة الجلسات" accent="#64748b"><SessionPlan /></Fold>
-          <p className="rounded-sm border border-[#2c2c33] bg-[#1a1a1e] p-2 text-[9.5px] leading-relaxed text-slate-600">
-            بيانات حقيقية مباشرة من حساب MT4/MT5 عبر MetaApi — 30 يوماً من شموع M15، ويتحدث السعر والشمعة الحالية كل 5 ثوانٍ. هذا ليس نصيحة استثمارية.
-          </p>
-        </aside>
+          </section>
+          <section className={`${card} p-4`}><WhalePanel whales={whales} onAlert={crewAlert} onStatus={setDbOk} /></section>
+          {tab === 'crew' && <section className={`${card} p-4`}><DnaPanel tfs={tfLadder} wave={wave} /></section>}
+          {tab === 'crew' && <section className={`${card} p-4`}><DevPanel st={stats} whales={whales} newsCount={newsList.filter((e) => e.time + 3600 > Date.now() / 1000).length} conds={conds} /></section>}
+          {tab === 'crew' && <section className={`${card} p-4`}><SessionPlan /></section>}
+        </div>
+
+        {tab === 'tv' && (
+          <div className="h-full p-3">
+            <iframe title="TradingView XAUUSD" dir="ltr" className={`h-[calc(100vh-130px)] w-full ${card}`}
+              src="https://www.tradingview.com/widgetembed/?symbol=OANDA%3AXAUUSD&interval=15&theme=dark&style=1&locale=ar&timezone=Etc%2FUTC&hide_side_toolbar=0&allow_symbol_change=1&withdateranges=1&studies=%5B%5D" />
+          </div>
+        )}
+
+        {tab === 'settings' && (
+          <div className="mx-auto max-w-3xl p-3">
+            <SettingsPage creds={creds} status={liveStatus} error={liveError}
+              onSave={(c) => { saveCreds(c); setCreds(c); }} onTest={() => creds && connectLive(creds)} onDbStatus={setDbOk} />
+          </div>
+        )}
+
+        <p className="px-4 pb-4 text-center text-[10px] text-slate-600">بيانات حقيقية من حساب MT4/MT5 عبر MetaApi · ليست نصيحة استثمارية</p>
       </div>
     </div>
   );

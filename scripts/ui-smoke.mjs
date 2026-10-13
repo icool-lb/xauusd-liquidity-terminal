@@ -40,29 +40,32 @@ await pg.route(/agiliumtrade/, async (rt) => {
   return rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ state: 'DEPLOYED', region: 'new-york' }) });
 });
 await pg.route((u) => !u.href.startsWith(`http://127.0.0.1:${port}`) && !/agiliumtrade/.test(u.href), (rt) => rt.abort());
+await pg.route('**/api/scan?health=1', (rt) => rt.fulfill({ status: 200, contentType: 'application/json',
+  body: JSON.stringify({ ok: true, metaapi: true, telegram: true, chat: false, webhook: true, scanKey: true, symbol: 'XAUUSD' }) }));
 await pg.addInitScript(() => localStorage.setItem('xau_metaapi_creds', JSON.stringify({ token: 't', accountId: 'a', symbol: 'XAUUSD' })));
 await pg.goto(`http://127.0.0.1:${port}/`);
-await pg.waitForFunction(() => /بيانات حقيقية · مباشر/.test(document.body.innerText), null, { timeout: 30000 });
+await pg.waitForFunction(() => /● مباشر/.test(document.body.innerText), null, { timeout: 30000 });
 await pg.waitForTimeout(1500);
 await mkdir('scripts/shots', { recursive: true });
 await pg.screenshot({ path: 'scripts/shots/desktop.png' });
-const folds = await pg.$$eval('section button[aria-expanded]', (bs) => bs.map((b) => b.innerText.split('\n')[0] + ':' + b.getAttribute('aria-expanded')));
-console.log('folds', folds.join(' | '));
-// افتح مختبر السحب والزخم وشغّل المقارنة
-await pg.getByRole('button', { name: /مختبر السحب والزخم/ }).click();
+const scanner = await pg.$eval('aside', (el) => el.innerText.slice(0, 400));
+console.log('scanner:', scanner.replace(/\n+/g, ' | '));
+await pg.getByRole('button', { name: 'افحص الآن' }).click();
+// المختبر
+await pg.getByRole('button', { name: 'المختبر', exact: true }).click();
 await pg.getByRole('button', { name: /شغّل المقارنة/ }).click();
 await pg.waitForSelector('text=الإعداد الحالي', { timeout: 60000 });
-const lab = await pg.$$eval('table', (ts) => ts.map((t) => t.innerText).find((x) => x.includes('الإعداد الحالي')));
-console.log('lab\n' + lab);
 await pg.screenshot({ path: 'scripts/shots/lab.png' });
-// صفحة الإعدادات: قواعد الاستراتيجيتين ومكتب Telegram
-await pg.getByRole('button', { name: /الإعدادات/ }).first().click();
+// الخبراء والأخبار
+await pg.getByRole('button', { name: 'الخبراء والأخبار' }).click(); await pg.waitForTimeout(800);
+await pg.screenshot({ path: 'scripts/shots/crew.png' });
+// الإعدادات
+await pg.getByRole('button', { name: 'الإعدادات', exact: true }).click();
 await pg.waitForSelector('text=مكتب التداول على الخادم', { timeout: 10000 });
-await pg.getByText('استراتيجية السحب + الحجم').scrollIntoViewIfNeeded();
-await pg.screenshot({ path: 'scripts/shots/settings.png' });
 await pg.getByText('مكتب التداول على الخادم').scrollIntoViewIfNeeded();
-await pg.screenshot({ path: 'scripts/shots/telegram.png' });
-await pg.getByRole('button', { name: /شارت التحليل/ }).click();
+await pg.screenshot({ path: 'scripts/shots/settings.png' });
+await pg.getByRole('button', { name: 'المكتب', exact: true }).click(); await pg.waitForTimeout(800);
+await pg.screenshot({ path: 'scripts/shots/desk-return.png' });
 await pg.setViewportSize({ width: 400, height: 860 }); await pg.waitForTimeout(500);
 await pg.screenshot({ path: 'scripts/shots/mobile.png' });
 console.log('errors', errs.length ? errs.join(' | ') : 'none');

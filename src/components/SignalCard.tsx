@@ -51,7 +51,7 @@ function MomBlock({ analysis }: { analysis: DayAnalysis }) {
           const long = m.side === 'long';
           const statusTxt = m.status === 'active' ? '⏳ نشطة' : m.status === 'sl' ? '❌ وقف −1R' : m.status === 'tp1' ? `✅ هدف 1 (+${m.pnlR}R)` : `✅✅ هدف 2 (+${m.pnlR}R)`;
           return (
-            <div key={m.id} className="rounded-sm bg-[#0a0a0c] p-1.5">
+            <div key={m.id} className="rounded-sm bg-[#1f1e1d] p-1.5">
               <div className="flex flex-wrap items-center gap-x-2 text-[9px]">
                 <span className={`font-black ${long ? 'text-emerald-300' : 'text-red-300'}`}>{long ? 'شراء ▲' : 'بيع ▼'}</span>
                 <span className="font-mono text-slate-400" dir="ltr">{hm(m.time)} UTC</span>
@@ -80,10 +80,10 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
     const above = fresh.filter((l) => l.price > price + 0.5).sort((a, b) => a.price - b.price).slice(0, 2);
     const below = fresh.filter((l) => l.price < price - 0.5).sort((a, b) => b.price - a.price).slice(0, 2);
     return (
-      <div className="shrink-0 border-b border-[#2c2c33] bg-[#0e0e11] px-4 py-2" dir="rtl">
+      <div className="shrink-0 border-b border-[#3e3e38] bg-[#0e0e11] px-4 py-2" dir="rtl">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-black text-slate-200">🎯 صفقة اليوم</span>
-          <span className="rounded-sm border border-[#3a3a44] px-2 py-0.5 text-[9px] text-slate-400">لا إشارة بعد — المنصة تنتظر اكتمال السيناريو المؤسسي</span>
+          <span className="rounded-sm border border-[#4d4c45] px-2 py-0.5 text-[9px] text-slate-400">لا إشارة بعد — المنصة تنتظر اكتمال السيناريو المؤسسي</span>
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
           شرط الدخول (بلا استثناء): <b className="text-amber-300">① سحب سيولة</b> لمستوى ← <b className="text-fuchsia-300">② كسر هيكلي معاكس</b> ← <b className="text-cyan-300">③ التداول بجهة الافتتاح اليومي</b>.
@@ -104,7 +104,7 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
           </div>
         )}
         {(analysis?.rejected?.length ?? 0) > 0 && (
-          <div className="mt-1.5 rounded-sm border border-[#3a3a44] bg-[#131316] p-1.5">
+          <div className="mt-1.5 rounded-sm border border-[#4d4c45] bg-[#262624] p-1.5">
             <div className="mb-0.5 text-[9px] font-bold text-slate-400">
               ⛔ فرص وصلت لكسر هيكلي ورفضها الانضباط ({analysis!.rejected.length}) — شفافية كاملة:
             </div>
@@ -141,7 +141,7 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
   const pct = hi > lo ? Math.max(2, Math.min(98, ((price - lo) / (hi - lo)) * 100)) : 50;
 
   const cell = (label: string, v: string, cls: string, sub?: string) => (
-    <div className="rounded-sm bg-[#131316] px-2 py-1.5">
+    <div className="rounded-sm bg-[#262624] px-2 py-1.5">
       <div className="text-[8.5px] text-slate-500">{label}</div>
       <div className={`font-mono text-[13px] font-black ${cls}`} dir="ltr">{v}</div>
       {sub && <div className="text-[8px] text-slate-500" dir="ltr">{sub}</div>}
@@ -158,7 +158,7 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
         </span>
         <span className="font-mono text-[9px] text-slate-500" dir="ltr">{hm(sig.time)} UTC</span>
         <StatusBadge s={sig} />
-        <span className="mr-auto rounded-sm border border-[#3a3a44] px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-300" dir="ltr">R:R = 1:{sig.rr}</span>
+        <span className="mr-auto rounded-sm border border-[#4d4c45] px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-300" dir="ltr">R:R = 1:{sig.rr}</span>
       </div>
 
       {/* الأرقام الأربعة الكبرى */}
@@ -172,7 +172,7 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
       {/* التقدم الحي أو النتيجة النهائية */}
       {!closed ? (
         <div className="mt-1.5">
-          <div className="relative h-2 overflow-hidden rounded-full bg-[#222227]" dir="ltr">
+          <div className="relative h-2 overflow-hidden rounded-full bg-[#363632]" dir="ltr">
             <div className={`absolute inset-y-0 left-0 transition-all ${long ? 'bg-emerald-400/50' : 'bg-red-400/50'}`} style={{ width: `${pct}%` }} />
             <div className="absolute inset-y-0 w-0.5 bg-white" style={{ left: `${pct}%` }} />
           </div>
@@ -191,7 +191,7 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
       )}
 
       {/* لماذا هذه الصفقة؟ */}
-      <div className="mt-1.5 rounded-sm border border-[#2c2c33] bg-[#0a0a0c] p-1.5">
+      <div className="mt-1.5 rounded-sm border border-[#3e3e38] bg-[#1f1e1d] p-1.5">
         <div className="text-[9px] font-bold text-slate-400">لماذا دخلنا؟ (سجلّ الأسباب)</div>
         <ul className="mt-0.5 space-y-0.5 text-[9.5px] leading-relaxed text-slate-300">
           {sig.reason.map((r, i) => <li key={i}>✚ {r}</li>)}

@@ -23,7 +23,7 @@
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 240 5.9% 10%;
-    --radius: 0.625rem;
+    --radius: 0.875rem;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -77,31 +77,22 @@
 /* ===== خطوط المنصة والطبقة الجمالية ===== */
 body {
   font-family: 'IBM Plex Sans Arabic', 'JetBrains Mono', system-ui, sans-serif;
-  background: #0a0a0c;
+  background: #1f1e1d;
 }
 .font-mono, code {
   font-family: 'JetBrains Mono', monospace !important;
 }
 
-/* طبقة scanline خفيفة بطابع المحطات المالية */
-.scanlines::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 50;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(255, 255, 255, 0.012) 3px
-  );
-}
+/* لمسات Claude: سطح دافئ هادئ وتركيز لطيف */
+.font-display { font-family: 'Noto Naskh Arabic', 'IBM Plex Sans Arabic', serif; letter-spacing: 0; }
+:focus-visible { outline: 2px solid #d97757; outline-offset: 2px; }
+::selection { background: #d9775740; }
+body { color: #e8e6dc; }
 
 /* شريط تمرير رفيع */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #131316; }
-::-webkit-scrollbar-thumb { background: #2c2c33; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a44; }
+::-webkit-scrollbar-track { background: #262624; }
+::-webkit-scrollbar-thumb { background: #3e3e38; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4d4c45; }
 
-* { border-radius: 2px; }
+

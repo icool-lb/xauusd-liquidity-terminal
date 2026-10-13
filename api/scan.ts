@@ -10,6 +10,13 @@ import { tgSend } from './_lib/telegram.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
+  // ?health=1 بلا مفتاح: هل الإعداد مكتمل؟ (قيم منطقية فقط — لا يكشف أي مفتاح)
+  if (String(req.query?.health ?? '') === '1') {
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json({ ok: true, metaapi: !!mtEnv(), telegram: !!process.env.TELEGRAM_BOT_TOKEN, chat: !!process.env.TELEGRAM_CHAT_ID,
+      webhook: !!process.env.TELEGRAM_WEBHOOK_SECRET, scanKey: !!process.env.SCAN_KEY, symbol: mtEnv()?.symbol ?? null });
+    return;
+  }
   const key = String(req.query?.key ?? '');
   const auth = String(req.headers?.authorization ?? '');
   const okKey = (process.env.SCAN_KEY && key === process.env.SCAN_KEY) || (process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`);

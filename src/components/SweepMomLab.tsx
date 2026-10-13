@@ -49,7 +49,7 @@ export function SweepMomLab({ candles }: { candles: Candle[] }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-slate-400">الفترة:</span>
         {[10, 20, 30, 60, 90].filter((d) => d <= Math.max(10, span - 1)).map((d) => (
-          <button key={d} onClick={() => setDays(d)} className={`rounded-sm border px-2 py-0.5 font-mono ${days === d ? 'border-amber-400/60 text-amber-300' : 'border-[#3a3a44] text-slate-500'}`}>{d}ي</button>
+          <button key={d} onClick={() => setDays(d)} className={`rounded-sm border px-2 py-0.5 font-mono ${days === d ? 'border-amber-400/60 text-amber-300' : 'border-[#4d4c45] text-slate-500'}`}>{d}ي</button>
         ))}
         <button onClick={() => setRun((x) => x + 1)} className="mr-auto rounded-sm border border-cyan-400/50 bg-cyan-400/10 px-3 py-1 font-bold text-cyan-200 active:scale-95">
           {run ? '↻ أعد الاختبار' : '▶ شغّل المقارنة'}
@@ -64,7 +64,7 @@ export function SweepMomLab({ candles }: { candles: Candle[] }) {
             </tr></thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i} className={`border-t border-[#2c2c33] ${r === best ? 'bg-emerald-400/5' : ''}`}>
+                <tr key={i} className={`border-t border-[#3e3e38] ${r === best ? 'bg-emerald-400/5' : ''}`}>
                   <td className="p-1 text-slate-300">{r === best && '★ '}{r.label}</td>
                   <td className="p-1 text-center">{cell(r.bt.sweep)}</td>
                   <td className="p-1 text-center">{cell(r.bt.mom)}</td>
@@ -73,7 +73,7 @@ export function SweepMomLab({ candles }: { candles: Candle[] }) {
                   <td className="p-1">{i > 0 && (
                     <button
                       onClick={() => { setEngineCfg(r.cfg); location.reload(); }}
-                      className="rounded-sm border border-[#3a3a44] px-1.5 py-0.5 text-[9px] text-slate-300 hover:border-emerald-400/50 hover:text-emerald-300"
+                      className="rounded-sm border border-[#4d4c45] px-1.5 py-0.5 text-[9px] text-slate-300 hover:border-emerald-400/50 hover:text-emerald-300"
                     >اعتمد</button>
                   )}</td>
                 </tr>

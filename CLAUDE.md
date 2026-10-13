@@ -1,6 +1,6 @@
 # منصة سيولة الذهب — XAUUSD Liquidity Terminal
 
-لكل ما يخصّ الاستراتيجيات والتنبيهات وTelegram والباك-تيست: استعمل المهارة **gold-desk** (`.claude/skills/gold-desk`).
+لكل ما يخصّ الاستراتيجيات والتنبيهات وTelegram والباك-تيست: استعمل المهارة **gold-ai** (`.claude/skills/gold-ai`) — ونقطة بدايتها `node scripts/brief.mjs`.
 
 - محرّك واحد `src/lib/engine.ts` للواجهة والخادم. لا منطق تداول مكرّر في `api/` أو المكوّنات.
 - الإشارات على الشموع المغلقة فقط؛ الحجم من `tickVolume`.
@@ -11,3 +11,5 @@
 - لمسات Claude: `slate` و`amber` في `tailwind.config.js` أعيد تعريفهما إلى رماديات دافئة وطين (#d97757)، والعناوين `font-display`.
 - استيرادات `api/` بامتداد `.js` (ESM على Vercel).
 - قبل الدفع: `npx tsc -b && npx tsc -p tsconfig.api.json && node scripts/test-server.mjs && npm run build`.
+- المناطق الذكية في `src/lib/smc.ts` (FVG/OB/BSL/SSL بحالات حيّة) تُرسم على إطار العرض وتُخزَّن في `zonesRef` — لا تحسبها في كل رسم.
+- مجلس الخبراء `src/lib/council.ts`: شخصيات افتراضية بأسماء قابلة للتغيير؛ الوزن منفصل عن الأولوية. لا أسماء أشخاص حقيقيين.

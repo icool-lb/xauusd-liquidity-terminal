@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Fold } from './components/Fold';
 import { SweepMomLab } from './components/SweepMomLab';
 import { ScannerPanel } from './components/ScannerPanel';
+import { CouncilPanel } from './components/CouncilPanel';
+import { NewsTicker } from './components/NewsTicker';
+import { buildTicker } from './lib/ticker';
+import { councilRound, type Round } from './lib/council';
 import GoldChart from './components/GoldChart';
 import { LevelsPanel, RiskCalc, StatsPanel, EventsLog, SessionPlan, ConnectionPanel, EquityCurve, LevelStats, SessionTimeline, CrewPanel } from './components/Panels';
 import { DevPanel, NewsPanel, WhalePanel } from './components/V16Panels';
@@ -109,6 +113,23 @@ export default function App() {
     else setLiveStatus('idle');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creds]);
+
+  // ---- بيانات الترابط: الفضة واليورو (مرآة الدولار) بنفس لاحقة رمز الذهب عند الوسيط ----
+  const [silver, setSilver] = useState<Candle[]>([]);
+  const [eurusd, setEurusd] = useState<Candle[]>([]);
+  useEffect(() => {
+    if (liveStatus !== 'ok' || !creds) return;
+    const m = /^(XAUUSD|GOLD)(.*)$/i.exec(creds.symbol);
+    const suf = m ? m[2] : '';
+    const get = async () => {
+      const try1 = async (syms: string[]) => { for (const sy of syms) { try { const c = await fetchHistory({ ...creds, symbol: sy }, regionRef.current, 3); if (c.length > 50) return c; } catch { /* جرّب التالي */ } } return []; };
+      setSilver(await try1(['XAGUSD' + suf, 'SILVER' + suf, 'XAGUSD']));
+      setEurusd(await try1(['EURUSD' + suf, 'EURUSD']));
+    };
+    void get();
+    const id = setInterval(get, 300_000);
+    return () => clearInterval(id);
+  }, [liveStatus, creds]);
 
   // تحديث الشموع الحالية (15م + 1م) والسعر كل 5 ثوانٍ
   useEffect(() => {
@@ -340,6 +361,35 @@ export default function App() {
     lastKz.current = kz;
   }, [all, dayOffset, soundOn]);
 
+  // ---- مجلس الخبراء: جولة كل 5 دقائق تُحفظ في المتصفح ----
+  const [rounds, setRounds] = useState<Round[]>(() => { try { return JSON.parse(localStorage.getItem('xau_council') || '[]') as Round[]; } catch { return []; } });
+  const councilIn = useRef({ all, analysis, silver, eurusd, account, riskPct });
+  councilIn.current = { all, analysis, silver, eurusd, account, riskPct };
+  useEffect(() => {
+    if (liveStatus !== 'ok' || dayOffset !== 0) return;
+    const tick = () => {
+      const c = councilIn.current;
+      const slot = Math.floor(Date.now() / 1000 / 300);
+      setRounds((prev) => {
+        if (prev[0]?.slot === slot) return prev;
+        const r = councilRound({ gold: c.all, analysis: c.analysis, silver: c.silver, eurusd: c.eurusd, balance: c.account, riskPct: c.riskPct,
+          pending: c.analysis?.momPending ? { side: c.analysis.momPending.side, limit: c.analysis.momPending.limit } : null });
+        if (!r) return prev;
+        const urgent = r.msgs.filter((m) => m.priority >= 2);
+        if (urgent.length && prev.length) setTimeout(() => crewAlert(`🏛️ ${urgent[0].who} (${urgent[0].type}): ${urgent[0].text}`), 0);
+        else if (prev[0] && prev[0].verdict.lean !== r.verdict.lean) setTimeout(() => crewAlert(`🏛️ تغيّر قرار مجلس الخبراء: ${r.verdict.text}`, false), 0);
+        const next = [r, ...prev].slice(0, 48);
+        try { localStorage.setItem('xau_council', JSON.stringify(next)); } catch { /* تجاهل */ }
+        return next;
+      });
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveStatus, dayOffset, analysis != null]);
+  const tickerItems = useMemo(() => buildTicker(all, dayOffset === 0 ? analysis : null, rounds[0] ?? null), [all, analysis, rounds, dayOffset]);
+
   const lastPrice = all.length ? all[all.length - 1].close : 0;
   const prevPrice = all.length > 1 ? all[all.length - 2].close : lastPrice;
   const delta = lastPrice - prevPrice;
@@ -363,7 +413,7 @@ export default function App() {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400 font-display text-[15px] font-bold text-[#1f1e1d]">Au</div>
           <div>
             <div className="font-display text-[17px] font-bold leading-none text-slate-50">منصة سيولة الذهب</div>
-            <div className="mt-1 text-[10px] text-slate-500"><span dir="ltr">XAUUSD · V34</span> · السحب والحجم · الزخم</div>
+            <div className="mt-1 text-[10px] text-slate-500"><span dir="ltr">XAUUSD · V35</span> · السحب والحجم · الزخم</div>
           </div>
         </div>
         <div dir="ltr" className="flex items-baseline gap-2 font-mono">
@@ -398,8 +448,10 @@ export default function App() {
         {liveStatus === 'ok' && dataInfo && <span dir="ltr" className="mr-auto shrink-0 font-mono text-[10px] text-slate-500">{dataInfo}</span>}
       </nav>
 
+      {liveStatus === 'ok' && <NewsTicker items={tickerItems} />}
+
       {toast && (
-        <div className="absolute left-1/2 top-24 z-50 max-w-[92vw] -translate-x-1/2 rounded-2xl border border-amber-400/40 bg-[#30302e] px-4 py-2.5 text-[12.5px] font-bold text-amber-200 shadow-[0_8px_40px_rgba(0,0,0,0.45)]">
+        <div className="fixed bottom-4 left-4 z-50 max-w-[min(440px,92vw)] rounded-2xl border border-amber-400/40 bg-[#30302e] px-4 py-2.5 text-[12.5px] font-bold text-amber-200 shadow-[0_8px_40px_rgba(0,0,0,0.45)]">
           {toast}
         </div>
       )}
@@ -459,6 +511,7 @@ export default function App() {
               )}
               {priceWarn && <p className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-2.5 text-[11px] leading-relaxed text-amber-200">{priceWarn}</p>}
               <ScannerPanel all={all} account={account} riskPct={riskPct} live={liveStatus === 'ok'} />
+              <CouncilPanel rounds={rounds} compact />
             </aside>
 
             {/* الشارت */}
@@ -561,6 +614,7 @@ export default function App() {
 
         {/* ===== الخبراء والأخبار: الأخبار والحيتان تبقى مركّبة لأنها تُطلق التنبيهات ===== */}
         <div className={`${tab === 'crew' ? 'grid' : 'hidden'} gap-3 p-3 lg:grid-cols-2`}>
+          {tab === 'crew' && <section className="lg:col-span-2"><CouncilPanel rounds={rounds} /></section>}
           {tab === 'crew' && (
             <section className={`${card} p-4`}>
               <CrewPanel

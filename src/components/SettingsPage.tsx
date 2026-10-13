@@ -4,6 +4,7 @@
 // كل شيء يُحفظ في متصفح المستخدم فقط ولا يُرسل لأي جهة ثالثة
 // ============================================================
 
+import { EXPERTS, expertNames, setExpertNames } from '../lib/council';
 import { useState } from 'react';
 import { ConnectionPanel } from './Panels';
 import { loadDbKey, saveDbKey, checkDbKey } from '../lib/databento';
@@ -174,6 +175,32 @@ function SignalRulesCard() {
   );
 }
 
+function CouncilNamesCard() {
+  const [names, setNames] = useState(expertNames);
+  const [msg, setMsg] = useState('');
+  return (
+    <div className="rounded-md border border-amber-400/30 bg-[#30302e] p-3">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+        <h3 className="text-[11px] font-bold text-amber-300">مجلس الخبراء — الأسماء</h3>
+      </div>
+      <p className="mb-2 text-[9.5px] leading-relaxed text-slate-500">شخصيات افتراضية بأدوار ثابتة؛ غيّر الأسماء كما تحب. التوصيات تُحسب من بياناتك ولا تُنسب لأشخاص حقيقيين.</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {EXPERTS.map((e) => (
+          <label key={e.id} className="block text-[10px] text-slate-500">{e.role}
+            <input value={names[e.id]} maxLength={30} onChange={(ev) => setNames({ ...names, [e.id]: ev.target.value })} className={inputCls} />
+          </label>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button onClick={() => { setExpertNames(names); setMsg('✅ حُفظت — تظهر في الجولة التالية'); }} className="rounded-sm border border-amber-400/40 px-3 py-1.5 text-[10px] font-bold text-amber-300 hover:bg-amber-400/10">احفظ الأسماء</button>
+        <button onClick={() => { setExpertNames({}); setNames(expertNames()); setMsg('أُعيدت الأسماء الافتراضية'); }} className="rounded-sm border border-[#4d4c45] px-3 py-1.5 text-[10px] text-slate-400">الافتراضي</button>
+      </div>
+      {msg && <p className="mt-1.5 text-[9.5px] text-amber-200/90">{msg}</p>}
+    </div>
+  );
+}
+
 const LS_SCANKEY = 'xau_scan_key';
 function DeskCard() {
   const [key, setKey] = useState(() => lsGet(LS_SCANKEY));
@@ -290,6 +317,9 @@ export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus 
 
       {/* ٤) قواعد الإشارة */}
       <SignalRulesCard />
+
+      {/* أسماء مجلس الخبراء */}
+      <CouncilNamesCard />
 
       {/* ٥) المكتب الخادمي: ماسح كل 15 دقيقة + بوت Telegram */}
       <DeskCard />

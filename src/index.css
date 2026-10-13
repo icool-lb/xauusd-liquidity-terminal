@@ -96,3 +96,8 @@ body { color: #e8e6dc; }
 ::-webkit-scrollbar-thumb:hover { background: #4d4c45; }
 
 
+
+/* شريط عاجل: يتحرّك من اليسار لليمين في الواجهة العربية، ونسختان متتاليتان لحلقة بلا قفزة */
+@keyframes ticker-rtl { from { transform: translateX(0); } to { transform: translateX(50%); } }
+.ticker-track { animation: ticker-rtl linear infinite; }
+@media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; } }

@@ -48,6 +48,15 @@ await pg.waitForFunction(() => /● مباشر/.test(document.body.innerText), n
 await pg.waitForTimeout(1500);
 await mkdir('scripts/shots', { recursive: true });
 await pg.screenshot({ path: 'scripts/shots/desktop.png' });
+// لقطة الشارت وحده ومجلس الخبراء
+await pg.evaluate(() => { const f = [...document.querySelectorAll('section button[aria-expanded]')].find((b) => /صفقة اليوم/.test(b.textContent)); if (f && f.getAttribute('aria-expanded') === 'true') f.click(); });
+await pg.waitForTimeout(600);
+const chartBox = await pg.$('main .relative.h-\\[62vh\\]');
+if (chartBox) await chartBox.screenshot({ path: 'scripts/shots/chart.png' });
+const council = await pg.$('h2:has-text("مجلس الخبراء")');
+if (council) { await council.scrollIntoViewIfNeeded(); await pg.screenshot({ path: 'scripts/shots/council.png' }); }
+const tick = await pg.$('[aria-label="شريط التحليل العاجل"]');
+console.log('ticker:', tick ? (await tick.innerText()).replace(/\n+/g, ' | ').slice(0, 600) : 'none');
 const scanner = await pg.$eval('aside', (el) => el.innerText.slice(0, 400));
 console.log('scanner:', scanner.replace(/\n+/g, ' | '));
 await pg.getByRole('button', { name: 'افحص الآن' }).click();

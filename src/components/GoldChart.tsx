@@ -8,9 +8,10 @@ import {
   type UTCTimestamp,
   ColorType,
 } from 'lightweight-charts';
+import { fvgZones, orderBlocks, liquidityPools, type FvgZone, type ObZone, type LiqPool } from '../lib/smc';
 import { jsPDF } from 'jspdf';
 import {
-  KILL_ZONES, detectFVGs, computeOTE, detectStructure, autoLiquidityZones, detectOrderBlocks,
+  KILL_ZONES, computeOTE, detectStructure,
   type DayAnalysis, type Candle,
 } from '../lib/engine';
 
@@ -40,8 +41,10 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
   // تنظيف العلامات والخطوط الحالية — يُستدعى قبل إزالة المخطط لا بعدها (وإلا طلبت المكتبة رسماً على مخطط مُتلَف)
   const overlayCleanup = useRef<(() => void) | null>(null);
   const drawRef = useRef<() => void>(() => {});
-  const stateRef = useRef({ analysis, layers, tfSeconds, fallback });
-  stateRef.current = { analysis, layers, tfSeconds, fallback };
+  const stateRef = useRef({ analysis, layers, tfSeconds, fallback, showAll });
+  stateRef.current = { analysis, layers, tfSeconds, fallback, showAll };
+  // المناطق الذكية تُحسب مرة لكل تغيّر في الشموع لا مع كل تمرير
+  const zonesRef = useRef<{ key: string; fvg: FvgZone[]; ob: ObZone[]; liq: LiqPool[] }>({ key: '', fvg: [], ob: [], liq: [] });
   const [full, setFull] = useState(false);
 
   // ---------- إنشاء الشارت ----------
@@ -108,7 +111,10 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
     drawRef.current = () => {
       const chart = chartRef.current, series = seriesRef.current, cv = canvasRef.current;
       if (!chart || !series || !cv) return;
-      const { analysis: an, layers: ly, tfSeconds: tf, fallback: fb } = stateRef.current;
+      const { analysis: an, layers: ly, tfSeconds: tf, fallback: fb, showAll: sa } = stateRef.current;
+      const zk = `${sa.length}-${sa[sa.length - 1]?.time}-${sa[sa.length - 1]?.close}-${tf}`;
+      if (zonesRef.current.key !== zk) zonesRef.current = { key: zk, fvg: fvgZones(sa, 220), ob: orderBlocks(sa, 220), liq: liquidityPools(sa, 260) };
+      const Z = zonesRef.current;
       const ctx = cv.getContext('2d');
       if (!ctx) return;
       const dpr = window.devicePixelRatio || 1;
@@ -151,28 +157,47 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
           }
         }
 
-        for (const sw of an.sweeps) {
-          const yA = y(sw.levelPrice), yB = y(sw.extreme);
-          if (yA === null || yB === null) continue;
-          const xs = x(sw.time) ?? xEnd;
-          const top = Math.min(yA, yB), h = Math.abs(yB - yA);
-          ctx.fillStyle = '#fbbf2422';
-          ctx.fillRect(Math.max(0, x0 ?? 0), top, Math.min(W, xs) - Math.max(0, x0 ?? 0), Math.max(h, 3));
-          ctx.strokeStyle = '#fbbf2466';
-          ctx.setLineDash([3, 3]);
-          ctx.strokeRect(Math.max(0, x0 ?? 0), top, Math.min(W, xs) - Math.max(0, x0 ?? 0), Math.max(h, 3));
-          ctx.setLineDash([]);
-        }
+        // (صناديق السحب الكبيرة القديمة أُزيلت: السحب يظهر بالأسهم وبملصق «✓ سُحبت» على خط السيولة)
+        // ===== رسم المناطق: ألوان مميّزة لكل نوع + حالة حيّة =====
+        const lastP = sa.length ? sa[sa.length - 1].close : an.lastPrice;
+        const pill = (txt: string, xx: number, yy: number, col: string, solid = true) => {
+          ctx.font = 'bold 9px JetBrains Mono, IBM Plex Sans Arabic';
+          const w = ctx.measureText(txt).width + 8;
+          const x1 = Math.min(Math.max(2, xx), W - w - 2);
+          ctx.fillStyle = solid ? col : '#262624e6';
+          ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x1, yy - 7, w, 14, 7); else ctx.rect(x1, yy - 7, w, 14); ctx.fill();
+          if (!solid) { ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke(); }
+          ctx.fillStyle = solid ? '#1f1e1d' : col;
+          ctx.fillText(txt, x1 + 4, yy + 3);
+        };
+        const zone = (t1: number, t2: number | null, pTop: number, pBot: number, col: string, fillA: string, opt: { dash?: number[]; lw?: number; strokeA?: string } = {}) => {
+          const yT = y(pTop), yB = y(pBot);
+          if (yT === null || yB === null) return null;
+          const x1 = Math.max(0, x(t1) ?? 0), x2 = t2 == null ? W : Math.min(W, x(t2) ?? W);
+          if (x2 <= x1) return null;
+          const top = Math.min(yT, yB), h = Math.max(Math.abs(yB - yT), 2);
+          ctx.fillStyle = col + fillA;
+          ctx.fillRect(x1, top, x2 - x1, h);
+          ctx.strokeStyle = col + (opt.strokeA ?? 'cc'); ctx.lineWidth = opt.lw ?? 1;
+          ctx.setLineDash(opt.dash ?? []);
+          ctx.strokeRect(x1, top, x2 - x1, h);
+          ctx.setLineDash([]); ctx.lineWidth = 1;
+          return { x1, x2, top, h };
+        };
+        const byDist = <T,>(arr: T[], p: (t: T) => number, n: number) => arr.slice().sort((q, r) => Math.abs(p(q) - lastP) - Math.abs(p(r) - lastP)).slice(0, n);
 
-        if (ly.fvg) for (const g of detectFVGs(day, 60)) {
-          if (g.filled) continue;
-          const yT = y(g.top), yB = y(g.bottom);
-          if (yT === null || yB === null) continue;
-          const xg = x(g.time) ?? x0 ?? 0;
-          ctx.fillStyle = g.dir === 'up' ? '#34d39914' : '#f8717114';
-          ctx.fillRect(xg, yT, Math.min(W, xEnd) - xg, Math.max(yB - yT, 2));
+        // 1) FVG — تركواز صاعد · وردي هابط؛ الجزء الممتلئ باهت والمتبقّي واضح؛ تختفي عند الامتلاء الكامل
+        if (ly.fvg) {
+          const act = byDist(Z.fvg.filter((g) => g.state !== 'filled'), (g) => (g.remTop + g.remBottom) / 2, 5);
+          const done = Z.fvg.filter((g) => g.state === 'filled').slice(-2);
+          for (const g of done) zone(g.t0, g.tEnd ?? null, g.top, g.bottom, '#94a3b8', '0c', { dash: [2, 4], strokeA: '33' });
+          for (const g of act) {
+            const col = g.dir === 'up' ? '#2dd4bf' : '#f472b6';
+            if (g.state === 'partial') zone(g.t0, null, g.top, g.bottom, col, '0d', { dash: [3, 3], strokeA: '55' });
+            const r = zone(g.t0, null, g.remTop, g.remBottom, col, g.state === 'fresh' ? '30' : '24', { lw: 1.2 });
+            if (r) pill(`FVG ${g.dir === 'up' ? '▲' : '▼'} ${g.size.toFixed(1)}$${g.state === 'partial' ? ` · ${Math.round(g.fill * 100)}%` : ''}`, r.x1 + 4, r.top + Math.min(r.h / 2, 9), col);
+          }
         }
-
         const sig = an.signals[0];
         if (sig) {
           const xs = x(sig.time) ?? 0;
@@ -215,43 +240,57 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
             ctx.fillText(m.kind, xx + 16, m.dir === 'up' ? yy - 4 : yy + 10);
           }
         }
-        // 2) الأوردر بلوك التلقائية
+        // 2) أوردر بلوك — أخضر طلب · برتقالي عرض؛ مُختبر = متقطّع؛ مكسور = Breaker رمادي
         if (ly.ob) {
-          for (const ob of detectOrderBlocks(day)) {
-            if (ob.broken) continue;
-            const yT = y(ob.top), yB = y(ob.bottom);
-            if (yT === null || yB === null) continue;
-            const x1 = x(ob.time) ?? 0;
-            const x2 = ob.to ? (x(ob.to) ?? Math.min(W, xEnd)) : Math.min(W, xEnd);
-            const col = ob.dir === 'up' ? '#34d399' : '#f87171';
-            ctx.fillStyle = col + (ob.to ? '0d' : '1f');
-            ctx.fillRect(x1, yT, x2 - x1, Math.max(yB - yT, 3));
-            ctx.strokeStyle = col + (ob.to ? '44' : 'aa');
-            ctx.setLineDash(ob.to ? [2, 3] : []);
-            ctx.strokeRect(x1, yT, x2 - x1, Math.max(yB - yT, 3));
-            ctx.setLineDash([]);
-            ctx.fillStyle = col;
-            ctx.font = 'bold 8.5px JetBrains Mono';
-            ctx.fillText(ob.dir === 'up' ? '+OB' : '-OB', x1 + 3, yT + 10);
+          const act = byDist(Z.ob.filter((o) => o.state !== 'broken'), (o) => (o.top + o.bottom) / 2, 4);
+          for (const o of Z.ob.filter((q) => q.state === 'broken').slice(-1))
+            zone(o.t0, o.tEnd ?? null, o.top, o.bottom, '#94a3b8', '10', { dash: [4, 3], strokeA: '55' });
+          for (const o of act) {
+            const col = o.dir === 'up' ? '#4ade80' : '#fb923c';
+            const r = zone(o.t0, null, o.top, o.bottom, col, o.state === 'fresh' ? '33' : '1c', { lw: o.state === 'fresh' ? 1.6 : 1, dash: o.state === 'tested' ? [5, 3] : [] });
+            if (r) {
+              ctx.fillStyle = col; ctx.fillRect(r.x1, r.top, 3, r.h); // حافة البداية
+              pill(`OB ${o.dir === 'up' ? 'طلب' : 'عرض'} ×${o.strength.toFixed(1)}${o.state === 'tested' ? ' · مُختبر' : ''}`, r.x1 + 6, r.top + Math.min(r.h / 2, 9), col, o.state === 'fresh');
+            }
           }
         }
-        // 3) مناطق السيولة التلقائية
+        // 3) السيولة — BSL أصفر فوق القمم · SSL بنفسجي تحت القيعان؛ المتساوية أسمك؛ المسحوبة تتوقّف عند السحب ✓
         if (ly.liq) {
-          for (const zn of autoLiquidityZones(an)) {
-            const yT = y(zn.top), yB = y(zn.bottom);
-            if (yT === null || yB === null) continue;
-            const x1 = x(zn.from) ?? 0;
-            const x2 = zn.to ? (x(zn.to) ?? W) : W;
-            const col = zn.side === 'buy' ? '#fbbf24' : '#a78bfa';
-            ctx.fillStyle = col + '14';
-            ctx.fillRect(x1, yT, Math.min(W, x2) - x1, Math.max(yB - yT, 4));
-            ctx.strokeStyle = col + '55';
-            ctx.setLineDash([6, 4]);
-            ctx.strokeRect(x1, yT, Math.min(W, x2) - x1, Math.max(yB - yT, 4));
-            ctx.setLineDash([]);
-            ctx.fillStyle = col;
-            ctx.font = 'bold 8.5px JetBrains Mono';
-            ctx.fillText(zn.label, x1 + 4, yT + 10);
+          const act = byDist(Z.liq.filter((p) => !p.swept), (p) => p.price, 6);
+          const swept = Z.liq.filter((p) => p.swept).sort((q, r) => (r.tSwept ?? 0) - (q.tSwept ?? 0)).slice(0, 2);
+          const line = (p: LiqPool, x2: number, faded: boolean) => {
+            const yy = y(p.price), x1 = Math.max(0, x(p.t0) ?? 0);
+            if (yy === null || x2 <= x1) return null;
+            const col = p.side === 'BSL' ? '#facc15' : '#a78bfa';
+            ctx.strokeStyle = col + (faded ? '55' : 'ee');
+            ctx.lineWidth = p.equal ? 2.4 : 1.4;
+            ctx.setLineDash(faded ? [2, 4] : [7, 4]);
+            ctx.beginPath(); ctx.moveTo(x1, yy); ctx.lineTo(x2, yy); ctx.stroke();
+            ctx.setLineDash([]); ctx.lineWidth = 1;
+            return { yy, col };
+          };
+          for (const p of swept) {
+            const xs = Math.min(W, x(p.tSwept ?? 0) ?? W);
+            const r = line(p, xs, true);
+            if (r) pill(`✓ ${p.side} سُحبت`, xs - 70, r.yy + (p.side === 'BSL' ? -10 : 10), r.col, false);
+          }
+          for (const p of act) {
+            const r = line(p, W, false);
+            if (r) pill(`${p.side}${p.equal ? ` · ${p.side === 'BSL' ? 'EQH' : 'EQL'}×${p.touches}` : ''} ${p.price.toFixed(2)}`, Math.max(40, (x(p.t0) ?? 40) + 4), r.yy + (p.side === 'BSL' ? -9 : 9), r.col);
+          }
+        }
+        // دليل الألوان
+        {
+          const items: [string, string][] = [];
+          if (ly.fvg) items.push(['#2dd4bf', 'FVG▲'], ['#f472b6', 'FVG▼']);
+          if (ly.ob) items.push(['#4ade80', 'OB طلب'], ['#fb923c', 'OB عرض']);
+          if (ly.liq) items.push(['#facc15', 'BSL'], ['#a78bfa', 'SSL']);
+          let xx = 44;
+          ctx.font = '9px JetBrains Mono, IBM Plex Sans Arabic';
+          for (const [col, txt] of items) {
+            ctx.fillStyle = col; ctx.fillRect(xx, H - 34, 9, 9);
+            ctx.fillStyle = '#d6d3c8'; ctx.fillText(txt, xx + 12, H - 26);
+            xx += ctx.measureText(txt).width + 26;
           }
         }
         // 4) خطوط افتتاح/إغلاق الجلسات

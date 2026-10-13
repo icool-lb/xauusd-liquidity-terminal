@@ -74,6 +74,35 @@ global.fetch = async (u, o) => {
 const mkRes = () => { const r = { code: 0, body: null, h: {} }; r.status = (c) => { r.code = c; return r; }; r.json = (b) => { r.body = b; return r; }; r.setHeader = (k, v) => { r.h[k] = v; }; r.end = () => r; return r; };
 Object.assign(process.env, { METAAPI_TOKEN: 'MT', METAAPI_ACCOUNT_ID: 'acc', SCAN_KEY: 'sk', TELEGRAM_BOT_TOKEN: 'bt', TELEGRAM_CHAT_ID: '42', TELEGRAM_WEBHOOK_SECRET: 'whsecret123' });
 
+console.log('\n[1ب] المناطق والمجلس');
+{
+  await build({ entryPoints: { smc: 'src/lib/smc.ts', council: 'src/lib/council.ts', brief: 'src/lib/brief.ts' }, bundle: true, platform: 'node', format: 'esm', outdir: out, logLevel: 'error' });
+  const S = await import(join(out, 'smc.js')), C = await import(join(out, 'council.js'));
+  // FVG مصطنعة: قفزة ثم عودة تملأ نصفها ثم كلها
+  const mk = (t, o, h, l, c) => ({ time: 1758000000 + t * 900, open: o, high: h, low: l, close: c, volume: 100 });
+  const base = []; for (let i = 0; i < 40; i++) base.push(mk(i, 100, 101, 99, 100));
+  const gap = [...base, mk(40, 100, 101, 99.5, 101), mk(41, 101, 106, 101, 105.5), mk(42, 105.5, 107, 104, 106)];
+  let z = S.fvgZones(gap).filter((q) => q.dir === 'up').pop();
+  ok(z && z.state === 'fresh' && z.bottom === 101 && z.top === 104, 'FVG صاعدة تُكتشف بحدودها', z && `${z.bottom}-${z.top}`);
+  z = S.fvgZones([...gap, mk(43, 106, 106, 102.5, 103)]).filter((q) => q.dir === 'up').pop();
+  ok(z.state === 'partial' && Math.abs(z.fill - 0.5) < 0.01 && z.remTop === 102.5, 'دخول السعر يملأها جزئياً ويقلّصها', Math.round(z.fill * 100) + '%');
+  z = S.fvgZones([...gap, mk(43, 106, 106, 100.5, 101)]).filter((q) => q.dir === 'up').pop();
+  ok(z.state === 'filled' && z.tEnd, 'الامتلاء الكامل يغلقها');
+  const pools = S.liquidityPools(hist);
+  ok(pools.some((p) => p.side === 'BSL') && pools.some((p) => p.side === 'SSL') && pools.every((p) => !p.swept || p.tSwept > p.t0), 'السيولة BSL/SSL والمسحوبة بعد تكوّنها');
+  const obs = S.orderBlocks(hist);
+  ok(obs.every((o) => o.top >= o.bottom && o.strength >= 1.5 && (o.state !== 'broken' || o.tEnd)), 'أوردر بلوك: حدود سليمة وقوة ≥ 1.5×ATR', obs.length);
+  const odds = S.firstBreakOdds(hist);
+  ok(odds === null || Math.abs(odds.upFirst + odds.downFirst + odds.none - 100) <= 2, 'الاحتمالات مجموعها 100%', odds && JSON.stringify(odds));
+  const a = E.analyzeDay(hist, lastDay);
+  const rd = C.councilRound({ gold: hist, analysis: a, balance: 10000, riskPct: 1 }, hist[hist.length - 1].time + 900);
+  ok(rd && rd.msgs.length >= 6 && Math.abs(rd.verdict.score) <= 100 && rd.msgs.every((m) => ['توصية', 'ملاحظة', 'تنبيه', 'اقتراح', 'توجيه'].includes(m.type)), 'جولة المجلس: 6+ رسائل بأنواع صحيحة وقرار ضمن ±100', rd && rd.verdict.text);
+  const ids = new Set(rd.msgs.map((m) => m.id));
+  ok(ids.size === rd.msgs.length, 'معرّفات رسائل المجلس فريدة');
+  const rd2 = C.councilRound({ gold: hist, analysis: a, balance: 10000, riskPct: 1 }, hist[hist.length - 1].time + 900 + 300);
+  ok(rd2.slot === rd.slot + 1, 'جولة جديدة كل 5 دقائق');
+}
+
 console.log('\n[2] الماسح /api/scan');
 let r = mkRes(); await scan({ query: { key: 'bad' }, headers: {} }, r); ok(r.code === 401, 'مفتاح خاطئ ⇐ 401');
 // تشغيل كل 15 دقيقة (+2) عبر يومين: كل حدث يُرسل مرة واحدة فقط
@@ -114,10 +143,17 @@ r = await post(upd(42, '/status'), 'nope'); ok(r.code === 401, 'سرّ الـ we
 tgSent.length = 0; r = await post(upd(999, '/status')); ok(r.code === 200 && tgSent.length === 0, 'محادثة غريبة ⇐ صمت تام');
 tgSent.length = 0; await post(upd(999, '/id')); ok(tgSent.length === 1 && tgSent[0].chat_id === 999 && /999/.test(tgSent[0].text), '/id يردّ بالمعرّف حتى لغير المسجّل');
 Date.now = () => end * 1000; NOW = end;
-for (const c of ['/status', '/levels', '/bt', '/settings', '/crew', '/help', '/scan', '/foo']) {
+for (const c of ['/status', '/levels', '/bt', '/settings', '/crew', '/help', '/scan', '/brief', '/council', '/foo']) {
   tgSent.length = 0; r = await post(upd(42, c));
   ok(r.code === 200 && tgSent.length >= 1 && tgSent.every((x) => x.chat_id === 42), `${c} يردّ`, tgSent[0]?.text.split('\n')[0].slice(0, 60));
 }
+tgSent.length = 0; await post(upd(42, '/brief'));
+const bt = tgSent.map((x) => x.text).join('\n');
+ok(/الصورة الآن/.test(bt) && /المناطق|السيولة/.test(bt) && /الاحتمالات/.test(bt) && /المسار المرجّح/.test(bt) && /ليس نصيحة مالية/.test(bt), '/brief فيه الأقسام الستة والتنبيه');
+ok(!/<(?!\/?(b|i|code)>)/.test(bt), '/brief بلا وسوم HTML غير مسموحة (النص مُهرَّب)');
+tgSent.length = 0; await post(upd(42, '/council'));
+const ct = tgSent.map((x) => x.text).join('\n');
+ok(/مجلس الخبراء/.test(ct) && (ct.match(/• <b>/g) || []).length >= 6, '/council يعرض جولة كاملة', (ct.match(/• <b>/g) || []).length + ' رسالة');
 Date.now = realNow;
 tgSent.length = 0; r = mkRes(); await tg({ method: 'GET', headers: { host: 'x.vercel.app' }, query: { key: 'sk', setup: '1' } }, r);
 ok(r.body.ok && tgSent.some((x) => x.m === 'setWebhook' && x.url === 'https://x.vercel.app/api/telegram' && x.secret_token === 'whsecret123') && tgSent.some((x) => x.m === 'setMyCommands'), 'الإعداد يسجّل الـ webhook بالسرّ والأوامر');

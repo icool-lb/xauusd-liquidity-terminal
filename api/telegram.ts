@@ -4,12 +4,16 @@
 // إعداد:   GET  /api/telegram?setup=1&key=SCAN_KEY  ← يسجّل الـ webhook والأوامر تلقائياً
 // لا يجيب إلا المحادثة TELEGRAM_CHAT_ID (عدا /id لمعرفة المعرّف أول مرة)
 // ============================================================
-import { fetchM15, mtEnv } from './_lib/metaapi.js';
-import { applyServerConfig, btText, cfgText, CREW_TEXT, HELP_TEXT, levelsText, scan, statusText } from './_lib/desk.js';
+import { fetchFirst, fetchM15, mtEnv, relatedSymbols } from './_lib/metaapi.js';
+import { applyServerConfig, btText, cfgText, CREW_TEXT, HELP_TEXT, levelsText, risk, scan, statusText } from './_lib/desk.js';
+import { esc } from './_lib/telegram.js';
+import { goldBrief } from '../src/lib/brief.js';
+import { analyzeDay } from '../src/lib/engine.js';
+import { councilRound } from '../src/lib/council.js';
 import { tgCall, tgSend } from './_lib/telegram.js';
 
 const COMMANDS = [
-  ['status', 'السعر والانحياز وصفقات اليوم'], ['levels', 'مستويات اليوم وقوتها'], ['scan', 'فحص الآن'],
+  ['brief', 'إيجاز الذهب: المسار والمناطق والتوصية'], ['council', 'جولة مجلس الخبراء الآن'], ['status', 'السعر والانحياز وصفقات اليوم'], ['levels', 'مستويات اليوم وقوتها'], ['scan', 'فحص الآن'],
   ['bt', 'باك-تيست 20 يوماً'], ['settings', 'الإعدادات'], ['crew', 'طاقم الخبراء'], ['id', 'معرّف المحادثة'], ['help', 'المساعدة'],
 ];
 
@@ -50,13 +54,26 @@ export default async function handler(req: any, res: any) {
     if (cmd === 'start' || cmd === 'help') await reply(HELP_TEXT);
     else if (cmd === 'crew') await reply(CREW_TEXT);
     else if (cmd === 'settings') { applyServerConfig(); await reply(cfgText()); }
-    else if (['status', 'levels', 'scan', 'bt'].includes(cmd)) {
+    else if (['status', 'levels', 'scan', 'bt', 'brief', 'council'].includes(cmd)) {
       const env = mtEnv();
       if (!env) { await reply('⚠️ METAAPI_TOKEN و METAAPI_ACCOUNT_ID غير مضبوطين في Vercel.'); }
       else {
         applyServerConfig();
         const candles = await fetchM15(env, cmd === 'bt' ? 3 : 1);
-        if (cmd === 'status') await reply(statusText(candles));
+        const r = risk();
+        if (cmd === 'brief' || cmd === 'council') {
+          const rel = relatedSymbols(env);
+          const [silver, eurusd] = await Promise.all([fetchFirst(env, rel.silver), fetchFirst(env, rel.eurusd)]);
+          if (cmd === 'brief') await reply(esc(goldBrief({ gold: candles, silver, eurusd, balance: r.bal, riskPct: r.pct })));
+          else {
+            const closed = candles.filter((x) => x.time + 900 <= Date.now() / 1000 + 5);
+            const last = closed[closed.length - 1]?.time ?? 0;
+            const a = analyzeDay(closed, Math.floor(last / 86400) * 86400);
+            const rd = councilRound({ gold: closed, analysis: a, silver, eurusd, balance: r.bal, riskPct: r.pct, pending: a?.momPending ? { side: a.momPending.side, limit: a.momPending.limit } : null });
+            await reply(rd ? [`🏛️ <b>مجلس الخبراء — ${esc(rd.verdict.text)}</b>`, '', ...rd.msgs.map((m) => `• <b>${esc(m.who)}</b> (${m.type}): ${esc(m.text)}`), '', '<i>شخصيات افتراضية — تحليل آلي من بياناتك، ليس نصيحة مالية</i>'].join('\n') : 'لا بيانات كافية للمجلس.');
+          }
+        }
+        else if (cmd === 'status') await reply(statusText(candles));
         else if (cmd === 'levels') await reply(levelsText(candles));
         else if (cmd === 'bt') await reply(btText(candles, 20));
         else {

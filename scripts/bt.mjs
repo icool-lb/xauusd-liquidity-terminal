@@ -1,4 +1,4 @@
-// باك-تيست من سطر الأوامر بنفس محرّك المنصة — تستعمله مهارة gold-desk
+// باك-تيست من سطر الأوامر بنفس محرّك المنصة — تستعمله مهارة gold-ai
 //   METAAPI_TOKEN=… METAAPI_ACCOUNT_ID=… node scripts/bt.mjs --days 30
 //   node scripts/bt.mjs --file candles.json --days 20 [--json]
 // candles.json: مصفوفة {time(unix s), open, high, low, close, volume}

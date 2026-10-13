@@ -30,6 +30,17 @@ async function getJSON(url: string, token: string, ms = 9000): Promise<unknown> 
 // MetaApi تعيد حتى 1000 شمعة للخلف من startTime. نطلب صفحتين (~20 يوماً) للتحليل والباك-تيست.
 type RawC = { time: string; open: number; high: number; low: number; close: number; tickVolume?: number; volume?: number };
 
+// رموز الترابط بنفس لاحقة رمز الذهب عند الوسيط (XAUUSD.m ⇒ XAGUSD.m و EURUSD.m)
+export function relatedSymbols(env: MtEnv) {
+  const m = /^(XAUUSD|GOLD)(.*)$/i.exec(env.symbol);
+  const suf = m ? m[2] : '';
+  return { silver: ['XAGUSD' + suf, 'SILVER' + suf, 'XAGUSD'], eurusd: ['EURUSD' + suf, 'EURUSD'] };
+}
+export async function fetchFirst(env: MtEnv, syms: string[]): Promise<Candle[]> {
+  for (const symbol of syms) { try { const c = await fetchM15({ ...env, symbol }, 1); if (c.length > 50) return c; } catch { /* التالي */ } }
+  return [];
+}
+
 export async function fetchM15(env: MtEnv, pages = 1): Promise<Candle[]> {
   const out = new Map<number, Candle>();
   let start: string | null = null;

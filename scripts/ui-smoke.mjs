@@ -26,7 +26,7 @@ const srv = createServer(async (q, r) => {
 const port = srv.address().port;
 const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
 const pg = await b.newPage({ viewport: { width: 1500, height: 950 }, locale: 'en-US' });
-const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
+const errs = []; pg.on('pageerror', (e) => errs.push(String(e) + ' @ ' + String(e.stack).split('\n').slice(1, 6).join(' / ')));
 await pg.route(/agiliumtrade/, async (rt) => {
   const u = new URL(rt.request().url());
   if (u.pathname.endsWith('/candles')) {
@@ -55,6 +55,14 @@ await pg.waitForSelector('text=الإعداد الحالي', { timeout: 60000 })
 const lab = await pg.$$eval('table', (ts) => ts.map((t) => t.innerText).find((x) => x.includes('الإعداد الحالي')));
 console.log('lab\n' + lab);
 await pg.screenshot({ path: 'scripts/shots/lab.png' });
+// صفحة الإعدادات: قواعد الاستراتيجيتين ومكتب Telegram
+await pg.getByRole('button', { name: /الإعدادات/ }).first().click();
+await pg.waitForSelector('text=مكتب التداول على الخادم', { timeout: 10000 });
+await pg.getByText('استراتيجية السحب + الحجم').scrollIntoViewIfNeeded();
+await pg.screenshot({ path: 'scripts/shots/settings.png' });
+await pg.getByText('مكتب التداول على الخادم').scrollIntoViewIfNeeded();
+await pg.screenshot({ path: 'scripts/shots/telegram.png' });
+await pg.getByRole('button', { name: /شارت التحليل/ }).click();
 await pg.setViewportSize({ width: 400, height: 860 }); await pg.waitForTimeout(500);
 await pg.screenshot({ path: 'scripts/shots/mobile.png' });
 console.log('errors', errs.length ? errs.join(' | ') : 'none');

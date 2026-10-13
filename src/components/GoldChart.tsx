@@ -37,6 +37,8 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
   const chartRef = useRef<IChartApi | null>(null);
   const lastFitKey = useRef<string>('');
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  // تنظيف العلامات والخطوط الحالية — يُستدعى قبل إزالة المخطط لا بعدها (وإلا طلبت المكتبة رسماً على مخطط مُتلَف)
+  const overlayCleanup = useRef<(() => void) | null>(null);
   const drawRef = useRef<() => void>(() => {});
   const stateRef = useRef({ analysis, layers, tfSeconds, fallback });
   stateRef.current = { analysis, layers, tfSeconds, fallback };
@@ -81,7 +83,13 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
     });
     ro.observe(ref.current);
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => drawRef.current());
-    return () => { ro.disconnect(); chart.remove(); };
+    return () => {
+      ro.disconnect();
+      try { overlayCleanup.current?.(); } catch { /* تجاهل */ }
+      overlayCleanup.current = null;
+      chartRef.current = null; seriesRef.current = null;
+      chart.remove();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -378,9 +386,16 @@ export default function GoldChart({ candles, analysis, showAll, tfSeconds, layer
     requestAnimationFrame(() => drawRef.current());
     setTimeout(() => drawRef.current(), 100);
 
-    return () => {
+    const cleanup = () => {
       pm.detach();
       lines.forEach((l) => l && series.removePriceLine(l));
+    };
+    overlayCleanup.current = cleanup;
+    return () => {
+      // إن كان المخطط قد أُزيل فقد نُظّفت الطبقات قبله — لا تلمس سلسلة مُتلَفة
+      if (!chartRef.current || overlayCleanup.current !== cleanup) return;
+      overlayCleanup.current = null;
+      cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAll, analysis, candles, tfSeconds]);

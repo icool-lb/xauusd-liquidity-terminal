@@ -176,6 +176,14 @@ if strategy.position_size != 0 and beAtR > 0 and not beDone and not na(lastSL) a
         beDone := true
         alert('{"side":"' + (isLg ? "buy" : "sell") + '","setup":"manage","event":"breakeven","price":' + str.tostring(ent, "#.##") + ',"sl":' + str.tostring(ent, "#.##") + ',"tp":' + str.tostring(lastTP, "#.##") + ',"note":"الصفقة في ربح ' + str.tostring(beAtR, "#.##") + 'R — نُقل الوقف إلى الدخول","ticker":"' + syminfo.ticker + '"}', alert.freq_once_per_bar_close)
 
+// أمر الزخم المعلّق (يُعرَّف هنا لأن السحب والمدير يقرآنه)
+var int   mDir = 0
+var float mLim = na
+var float mSL  = na
+var float mTP  = na
+var int   mArm = 0
+var int   mExp = 0
+
 // قرار مدير المؤشر: هل يُسمح بصفقة جديدة الآن؟
 limTrades = maxTrades > 0 and tradesToday >= maxTrades
 limLoss   = stopLoss2 > 0 and lossStreak >= stopLoss2
@@ -295,13 +303,6 @@ if not na(pl)
 momVolOk = not momVol or volume == 0 or na(volAvg) or volume >= volAvg * 1.1
 bosUp = not na(lastPH) and close > lastPH and close[1] <= lastPH
 bosDn = not na(lastPL) and close < lastPL and close[1] >= lastPL
-
-var int   mDir = 0
-var float mLim = na
-var float mSL  = na
-var float mTP  = na
-var int   mArm = 0
-var int   mExp = 0
 
 if useMom and (bosUp or bosDn)
     isL  = bosUp

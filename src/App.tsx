@@ -413,7 +413,7 @@ export default function App() {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400 font-display text-[15px] font-bold text-[#1f1e1d]">Au</div>
           <div>
             <div className="font-display text-[17px] font-bold leading-none text-slate-50">منصة سيولة الذهب</div>
-            <div className="mt-1 text-[10px] text-slate-500"><span dir="ltr">XAUUSD · V35</span> · السحب والحجم · الزخم</div>
+            <div className="mt-1 text-[10px] text-slate-500"><span dir="ltr">XAUUSD · V36</span> · السحب والحجم · الزخم</div>
           </div>
         </div>
         <div dir="ltr" className="flex items-baseline gap-2 font-mono">

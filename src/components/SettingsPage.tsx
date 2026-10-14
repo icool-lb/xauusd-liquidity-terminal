@@ -201,6 +201,41 @@ function CouncilNamesCard() {
   );
 }
 
+function PineCard() {
+  const [msg, setMsg] = useState('');
+  const url = '/tradingview/icool-gold.pine';
+  const copy = async () => {
+    try {
+      const t = await (await fetch(url, { cache: 'no-store' })).text();
+      await navigator.clipboard.writeText(t);
+      setMsg(`✅ نُسخ الكود (${t.split('\n').length} سطراً) — الصقه في Pine Editor`);
+    } catch { setMsg('تعذّر النسخ تلقائياً — افتح الرابط وانسخ النص يدوياً'); }
+  };
+  return (
+    <div className="rounded-md border border-cyan-400/30 bg-[#30302e] p-3">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+        <h3 className="text-[11px] font-bold text-cyan-300">مؤشر iCOOL Gold لـ TradingView — استراتيجية + تنبيهات</h3>
+      </div>
+      <p className="mb-2 text-[9.5px] leading-relaxed text-slate-400">
+        نفس قواعد المنصة: السحب + الحجم، الزخم بأمر معلّق، FVG وأوردر بلوك ديناميكية، مستويات الجلسات، اللوت المحسوب من رأس المال والمخاطرة،
+        وحدّ خسارة يومي يوقف الصفقات. يعمل كاستراتيجية فترى نتائجه في Strategy Tester.
+      </p>
+      <div className="mb-2 flex flex-wrap gap-2">
+        <button onClick={copy} className="rounded-sm border border-cyan-400/50 bg-cyan-400/10 px-3 py-1.5 text-[10px] font-bold text-cyan-200">📋 انسخ الكود</button>
+        <a href={url} target="_blank" rel="noreferrer" className="rounded-sm border border-[#4d4c45] px-3 py-1.5 text-[10px] text-slate-300">افتح الملف</a>
+      </div>
+      {msg && <p className="mb-2 text-[9.5px] text-cyan-200">{msg}</p>}
+      <ol className="list-decimal space-y-0.5 pr-4 text-[9.5px] leading-relaxed text-slate-400">
+        <li>في TradingView افتح شارت <b dir="ltr">XAUUSD</b> على فريم <b>15 دقيقة</b> ← <b>Pine Editor</b> أسفل الشاشة.</li>
+        <li>احذف ما فيه والصق الكود ← <b>Save</b> ← <b>Add to chart</b>. من إعدادات المؤشر ضع رأس مالك والمخاطرة.</li>
+        <li>التنبيه: زر الساعة ⏰ ← Condition: <b>iCOOL Gold</b> ← <b dir="ltr">alert() function calls only</b>.</li>
+        <li>للهاتف: فعّل <b>Notify in app</b> (مجاني). لـ Telegram: فعّل <b>Webhook URL</b> (خطة مدفوعة) والصق الرابط من البطاقة أدناه.</li>
+      </ol>
+    </div>
+  );
+}
+
 const LS_SCANKEY = 'xau_scan_key';
 function DeskCard() {
   const [key, setKey] = useState(() => lsGet(LS_SCANKEY));
@@ -323,6 +358,9 @@ export function SettingsPage({ creds, status, error, onSave, onTest, onDbStatus 
 
       {/* ٥) المكتب الخادمي: ماسح كل 15 دقيقة + بوت Telegram */}
       <DeskCard />
+
+      {/* مؤشر TradingView */}
+      <PineCard />
 
       {/* ٦) ربط TradingView ← Telegram */}
       <div className="rounded-md border border-[#3e3e38] bg-[#30302e] p-3">

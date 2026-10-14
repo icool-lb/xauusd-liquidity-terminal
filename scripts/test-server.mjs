@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const out = mkdtempSync(join(tmpdir(), 'xau-'));
-await build({ entryPoints: { scan: 'api/scan.ts', telegram: 'api/telegram.ts', engine: 'src/lib/engine.ts', desk: 'api/_lib/desk.ts' },
+await build({ entryPoints: { tvhook: 'api/tv-hook.ts', scan: 'api/scan.ts', telegram: 'api/telegram.ts', engine: 'src/lib/engine.ts', desk: 'api/_lib/desk.ts' },
   bundle: true, platform: 'node', format: 'esm', outdir: out, logLevel: 'error' });
 const scan = (await import(join(out, 'scan.js'))).default;
 const tg = (await import(join(out, 'telegram.js'))).default;
@@ -157,6 +157,17 @@ ok(/مجلس الخبراء/.test(ct) && (ct.match(/• <b>/g) || []).length >= 
 Date.now = realNow;
 tgSent.length = 0; r = mkRes(); await tg({ method: 'GET', headers: { host: 'x.vercel.app' }, query: { key: 'sk', setup: '1' } }, r);
 ok(r.body.ok && tgSent.some((x) => x.m === 'setWebhook' && x.url === 'https://x.vercel.app/api/telegram' && x.secret_token === 'whsecret123') && tgSent.some((x) => x.m === 'setMyCommands'), 'الإعداد يسجّل الـ webhook بالسرّ والأوامر');
+
+console.log('\n[4] Webhook من مؤشر TradingView');
+{
+  const tvh = (await import(join(out, 'tvhook.js'))).default;
+  process.env.TV_HOOK_KEY = 'tvk'; tgSent.length = 0;
+  const body = { side: 'buy', setup: 'momentum', event: 'pending', price: 4180.5, sl: 4172.5, tp: 4197, lot: 0.12, rr: 2.06, note: 'BOS موجة 16$', ticker: 'XAUUSD' };
+  let rr = mkRes(); await tvh({ method: 'POST', query: { key: 'bad' }, body }, rr); ok(rr.code === 401, 'مفتاح خاطئ ⇐ 401');
+  rr = mkRes(); await tvh({ method: 'POST', query: { key: 'tvk' }, body: JSON.stringify(body) }, rr);
+  const t = tgSent[0]?.text ?? '';
+  ok(rr.code === 200 && /أمر زخم معلّق/.test(t) && /4180\.5/.test(t) && /\(8\.00\$\)/.test(t) && /0\.12/.test(t) && /R:R 2\.06/.test(t), 'رسالة TradingView: النوع والدخول والوقف واللوت و R:R', t.split('\n')[0]);
+}
 
 console.log(fail ? `\n✗ ${fail} فشل` : '\n✓ كل الاختبارات نجحت');
 process.exit(fail ? 1 : 0);

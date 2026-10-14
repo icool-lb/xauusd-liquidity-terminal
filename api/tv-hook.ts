@@ -49,14 +49,20 @@ export default async function handler(req: any, res: any) {
 
 function format(o: Record<string, unknown>): string {
   const side = String(o.side ?? o.action ?? '').toLowerCase();
-  const emoji = side.includes('buy') || side.includes('long') ? '🟢 شراء' : side.includes('sell') || side.includes('short') ? '🔴 بيع' : '⚡ تنبيه';
-  const lines = [`<b>${emoji}</b> XAUUSD`];
-  if (o.price) lines.push(`السعر: <b>${escape(String(o.price))}</b>`);
-  if (o.sl || o.stop) lines.push(`وقف: ${escape(String(o.sl ?? o.stop))}`);
-  if (o.tp) lines.push(`هدف: ${escape(String(o.tp))}`);
-  if (o.note) lines.push(`ملاحظة: ${escape(String(o.note))}`);
-  if (o.ticker) lines.push(`<code>${escape(String(o.ticker))}</code>`);
+  const isBuy = side.includes('buy') || side.includes('long'), isSell = side.includes('sell') || side.includes('short');
+  const setup = String(o.setup ?? '');
+  const ev = String(o.event ?? '');
+  const title = setup === 'momentum'
+    ? (ev === 'pending' ? '⏳ أمر زخم معلّق (Limit)' : ev === 'filled' ? '✅ تفعّل أمر الزخم' : 'زخم')
+    : setup === 'sweep' ? 'سحب سيولة + كسر هيكلي' : 'تنبيه TradingView';
+  const lines = [`${isBuy ? '🟢' : isSell ? '🔴' : '⚡'} <b>${title}</b> · ${escape(String(o.ticker ?? 'XAUUSD'))} ${isBuy ? 'شراء' : isSell ? 'بيع' : ''}`];
+  if (o.price) lines.push(`${ev === 'pending' ? 'أمر محدد عند' : 'دخول'} <b>${escape(String(o.price))}</b>`);
+  if (o.sl || o.stop) lines.push(`وقف <b>${escape(String(o.sl ?? o.stop))}</b>${o.price && (o.sl ?? o.stop) ? ` (${Math.abs(Number(o.price) - Number(o.sl ?? o.stop)).toFixed(2)}$)` : ''}`);
+  if (o.tp) lines.push(`هدف <b>${escape(String(o.tp))}</b>${o.rr ? ` · R:R ${escape(String(o.rr))}` : ''}`);
+  if (o.lot) lines.push(`📦 اللوت المحسوب: <b>${escape(String(o.lot))}</b>`);
+  if (o.note) lines.push(`• ${escape(String(o.note))}`);
   if (lines.length === 1) lines.push(`<code>${escape(JSON.stringify(o)).slice(0, 200)}</code>`);
+  lines.push('<i>من مؤشر iCOOL Gold على TradingView · التزم بالوقف · ليست نصيحة مالية</i>');
   return lines.join('\n');
 }
 

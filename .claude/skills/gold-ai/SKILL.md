@@ -33,10 +33,17 @@ METAAPI_TOKEN=… METAAPI_ACCOUNT_ID=… [METAAPI_SYMBOL=XAUUSD] node scripts/br
 | `src/lib/brief.ts` | إيجاز Gold AI النصي |
 | `src/lib/crew.ts` | خبراء الصفقة (يحكمون على صفقة بعينها) — السكانر وTelegram |
 | `src/lib/ticker.ts` | الشريط العاجل |
+| `public/tradingview/icool-gold.pine` | نفس القواعد كاستراتيجية Pine v5: السحب+الحجم، الزخم، FVG/OB، اللوت، حدّ يومي، `alert()` بـ JSON |
+| `api/tv-hook.ts` | يستقبل تنبيهات المؤشر (`?key=TV_HOOK_KEY`) ويصيغها لـ Telegram |
 | `api/scan.ts` · `api/telegram.ts` | الماسح كل 15 دقيقة · البوت (/brief /council /status /levels /scan /bt /settings /crew /id) |
 
 المراجع: `references/strategies.md` (قواعد السحب والزخم)، `references/council.md` (المجلس والأوزان)،
 `references/zones.md` (تعريفات FVG/OB/السيولة)، `references/experts.md` (خبراء الصفقة)، `references/ops.md` (التشغيل والأعطال).
+
+## مؤشر TradingView
+أي تعديل على قاعدة في المحرّك يُنقل إلى `icool-gold.pine` أيضاً، وإلا اختلف المؤشر عن المنصة. لا يمكن ترجمة Pine هنا —
+اطلب من المستخدم لصقه وإرسال أي خطأ يظهر في Pine Editor بالسطر. رسالة `alert()` بصيغة JSON:
+`{side, setup: sweep|momentum, event: entry|pending|filled, price, sl, tp, lot, rr, note, ticker}`.
 
 ## 3) تطوير الاستراتيجيات
 1. `node scripts/bt.mjs --days 30` ثم `--days 60` (أو المختبر في المنصة).

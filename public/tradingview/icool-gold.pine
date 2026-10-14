@@ -1,0 +1,352 @@
+//@version=5
+// ============================================================================
+// iCOOL Gold — السحب + الحجم · الزخم (BOS + ارتداد) · FVG · أوردر بلوك · إدارة مخاطر
+// نفس قواعد منصة سيولة الذهب. للإطار M15 على XAUUSD. كل الأوقات UTC.
+// التنبيه: أنشئ تنبيهاً على هذه الاستراتيجية بشرط «alert() function calls only».
+//   • بلا Webhook: يصلك إشعار على تطبيق TradingView في الهاتف (يعمل بالخطة المجانية).
+//   • مع Webhook (خطة مدفوعة): https://xauusd-liquidity-terminal.vercel.app/api/tv-hook?key=مفتاحك ⇐ Telegram
+// ليس نصيحة مالية. اختبره في Strategy Tester وعلى حساب تجريبي قبل أي مال حقيقي.
+// ============================================================================
+strategy("iCOOL Gold — Sweep+Volume & Momentum", shorttitle="iCOOL Gold", overlay=true,
+     initial_capital=10000, default_qty_type=strategy.fixed, default_qty_value=1, pyramiding=0,
+     max_boxes_count=200, max_lines_count=100, max_labels_count=200, calc_on_every_tick=false)
+
+// ---------------- المدخلات ----------------
+grpR = "إدارة المخاطر"
+balance    = input.float(10000, "رأس المال $", minval=100, group=grpR)
+riskPct    = input.float(1.0, "المخاطرة لكل صفقة %", minval=0.1, maxval=5.0, step=0.1, group=grpR)
+contract   = input.float(100, "أونصة لكل لوت (XAUUSD = 100)", minval=1, group=grpR)
+dayLossPct = input.float(5.0, "حد الخسارة اليومي % (يوقف الصفقات الجديدة)", minval=0.5, maxval=20, group=grpR)
+
+grpS = "استراتيجية السحب + الحجم"
+useSweep   = input.bool(true, "تفعيل", group=grpS)
+sweepBuf   = input.float(0.5, "أقل اختراق للسحب $", minval=0.1, group=grpS)
+useVol     = input.bool(false, "فلتر الحجم", group=grpS)
+volMult    = input.float(1.2, "حجم شمعة السحب ≥ × متوسط 20", minval=0.5, group=grpS)
+openFilter = input.bool(true, "فلتر الافتتاح: لا شراء تحته ولا بيع فوقه", group=grpS)
+minRR      = input.float(1.2, "أدنى R:R", minval=0.5, group=grpS)
+maxSig     = input.int(1, "صفقات سحب في اليوم", minval=1, maxval=5, group=grpS)
+chochWin   = input.int(16, "مهلة الكسر الهيكلي بعد السحب (شموع)", minval=2, group=grpS)
+
+grpM = "استراتيجية الزخم: BOS + ارتداد"
+useMom   = input.bool(true, "تفعيل", group=grpM)
+minLeg   = input.float(8.0, "أقل موجة كسر $", minval=1, group=grpM)
+retr     = input.float(0.5, "نسبة الارتداد للدخول", minval=0.3, maxval=0.7, step=0.05, group=grpM)
+momWin   = input.int(12, "صلاحية الأمر المعلّق (شموع)", minval=2, group=grpM)
+momBias  = input.bool(false, "مع انحياز الافتتاح فقط", group=grpM)
+momVol   = input.bool(false, "فلتر حجم شمعة الكسر", group=grpM)
+
+grpZ = "العرض"
+showLvl = input.bool(true, "مستويات اليوم والجلسات", group=grpZ)
+showFvg = input.bool(true, "FVG ديناميكية", group=grpZ)
+showOb  = input.bool(true, "أوردر بلوك", group=grpZ)
+showTbl = input.bool(true, "لوحة المعلومات", group=grpZ)
+
+// ---------------- الوقت والجلسات (UTC) ----------------
+dayStart = timestamp("UTC", year(time, "UTC"), month(time, "UTC"), dayofmonth(time, "UTC"), 0, 0)
+newDay   = dayStart != dayStart[1]
+hUTC     = hour(time, "UTC")
+inAsia   = hUTC < 8
+inLon    = hUTC >= 8 and hUTC < 13
+inNY     = hUTC >= 13 and hUTC < 21
+
+atr    = ta.atr(14)
+volAvg = ta.sma(volume, 20)
+hh4    = ta.highest(high, 4)[1]
+ll4    = ta.lowest(low, 4)[1]
+legLo  = ta.lowest(low, 9)
+legHi  = ta.highest(high, 9)
+ph     = ta.pivothigh(high, 3, 3)
+pl     = ta.pivotlow(low, 3, 3)
+
+// ---------------- حالة اليوم ----------------
+var float dOpen = na
+var float dHigh = na
+var float dLow  = na
+var float pdh   = na
+var float pdl   = na
+var float aH    = na
+var float aL    = na
+var float lH    = na
+var float lL    = na
+var bool  sAH = false
+var bool  sAL = false
+var bool  sLH = false
+var bool  sLL = false
+var bool  sPH = false
+var bool  sPL = false
+var int   sigToday = 0
+var bool  mUsedUp = false
+var bool  mUsedDn = false
+var float dayEq = strategy.initial_capital
+
+if newDay
+    pdh := dHigh
+    pdl := dLow
+    dOpen := open
+    dHigh := high
+    dLow := low
+    aH := na
+    aL := na
+    lH := na
+    lL := na
+    sAH := false
+    sAL := false
+    sLH := false
+    sLL := false
+    sPH := false
+    sPL := false
+    sigToday := 0
+    mUsedUp := false
+    mUsedDn := false
+    dayEq := strategy.equity
+else
+    dHigh := math.max(dHigh, high)
+    dLow := math.min(dLow, low)
+
+if inAsia
+    aH := na(aH) ? high : math.max(aH, high)
+    aL := na(aL) ? low : math.min(aL, low)
+if inLon
+    lH := na(lH) ? high : math.max(lH, high)
+    lL := na(lL) ? low : math.min(lL, low)
+
+dayLocked = strategy.equity <= dayEq * (1 - dayLossPct / 100)
+flat      = strategy.position_size == 0
+
+// اللوت من المخاطرة ومسافة الوقف: (رأس المال × المخاطرة%) ÷ (المسافة × أونصات اللوت)
+lotFor(float dist) =>
+    math.floor(balance * riskPct / 100 / (math.max(dist, 0.5) * contract) * 100) / 100
+
+// أقرب مستوى سيولة لم يُسحب فوق/تحت سعر ما — هدف الصفقة
+nextUp(float p) =>
+    float best = na
+    for v in array.from(sAH ? na : aH, sLH ? na : lH, sPH ? na : pdh)
+        if not na(v) and v > p + 3
+            best := na(best) ? v : math.min(best, v)
+    best
+nextDn(float p) =>
+    float best = na
+    for v in array.from(sAL ? na : aL, sLL ? na : lL, sPL ? na : pdl)
+        if not na(v) and v < p - 3
+            best := na(best) ? v : math.max(best, v)
+    best
+
+jsonMsg(string side, string setup, string ev, float price, float sl, float tp, float lots, string note) =>
+    '{"side":"' + side + '","setup":"' + setup + '","event":"' + ev + '","price":' + str.tostring(price, "#.##") +
+     ',"sl":' + str.tostring(sl, "#.##") + ',"tp":' + str.tostring(tp, "#.##") + ',"lot":' + str.tostring(lots, "#.##") +
+     ',"rr":' + str.tostring(math.abs(tp - price) / math.max(math.abs(price - sl), 0.01), "#.##") +
+     ',"note":"' + note + '","ticker":"' + syminfo.ticker + '"}'
+
+// ============================================================================
+// 1) السحب + الحجم: فتيل يخترق مستوى سيولة ويغلق داخله ⇒ ننتظر كسراً هيكلياً عكسياً
+// ============================================================================
+volOk = not useVol or volume == 0 or na(volAvg) or volume >= volAvg * volMult
+var int    wDir   = 0
+var float  wStr   = na
+var float  wExt   = na
+var int    wUntil = 0
+var string wLbl   = ""
+
+afterAsia = not inAsia
+if useSweep and afterAsia and volOk
+    // سحب القمم ⇒ ننتظر كسراً هابطاً
+    if not sAH and not na(aH) and high > aH + sweepBuf and close < aH
+        sAH := true
+        wDir := -1, wStr := ll4, wExt := high, wUntil := bar_index + chochWin, wLbl := "سحب قمة آسيا"
+    else if not sPH and not na(pdh) and high > pdh + sweepBuf and close < pdh
+        sPH := true
+        wDir := -1, wStr := ll4, wExt := high, wUntil := bar_index + chochWin, wLbl := "سحب قمة الأمس"
+    else if not sLH and not na(lH) and not inLon and high > lH + sweepBuf and close < lH
+        sLH := true
+        wDir := -1, wStr := ll4, wExt := high, wUntil := bar_index + chochWin, wLbl := "سحب قمة لندن"
+    // سحب القيعان ⇒ ننتظر كسراً صاعداً
+    if not sAL and not na(aL) and low < aL - sweepBuf and close > aL
+        sAL := true
+        wDir := 1, wStr := hh4, wExt := low, wUntil := bar_index + chochWin, wLbl := "سحب قاع آسيا"
+    else if not sPL and not na(pdl) and low < pdl - sweepBuf and close > pdl
+        sPL := true
+        wDir := 1, wStr := hh4, wExt := low, wUntil := bar_index + chochWin, wLbl := "سحب قاع الأمس"
+    else if not sLL and not na(lL) and not inLon and low < lL - sweepBuf and close > lL
+        sLL := true
+        wDir := 1, wStr := hh4, wExt := low, wUntil := bar_index + chochWin, wLbl := "سحب قاع لندن"
+
+if wDir == 1
+    wExt := math.min(wExt, low)
+if wDir == -1
+    wExt := math.max(wExt, high)
+if wDir != 0 and bar_index > wUntil
+    wDir := 0
+
+chochUp = wDir == 1 and close > wStr
+chochDn = wDir == -1 and close < wStr
+
+if chochUp or chochDn
+    isL   = chochUp
+    entry = close
+    sl    = isL ? wExt - 1.5 : wExt + 1.5
+    risk  = math.abs(entry - sl)
+    tgt   = isL ? nextUp(entry) : nextDn(entry)
+    tp    = na(tgt) ? (isL ? entry + 2 * risk : entry - 2 * risk) : tgt
+    rr    = math.abs(tp - entry) / math.max(risk, 0.01)
+    lots  = lotFor(risk)
+    okOpen = not openFilter or (isL ? entry >= dOpen - 2 : entry <= dOpen + 2)
+    if risk >= 2 and okOpen and rr >= minRR and sigToday < maxSig and lots >= 0.01 and not dayLocked and flat
+        sigToday += 1
+        qty = lots * contract
+        if isL
+            strategy.entry("SW L", strategy.long, qty=qty)
+            strategy.exit("SW L x", "SW L", stop=sl, limit=tp)
+        else
+            strategy.entry("SW S", strategy.short, qty=qty)
+            strategy.exit("SW S x", "SW S", stop=sl, limit=tp)
+        label.new(bar_index, isL ? low : high, (isL ? "▲ شراء" : "▼ بيع") + " · " + wLbl + "\nدخول " + str.tostring(entry, "#.##") +
+             "\nوقف " + str.tostring(sl, "#.##") + " · هدف " + str.tostring(tp, "#.##") + "\nلوت " + str.tostring(lots, "#.##") + " · R:R " + str.tostring(rr, "#.#"),
+             style=isL ? label.style_label_up : label.style_label_down, color=isL ? color.new(#34d399, 10) : color.new(#f87171, 10), textcolor=color.black, size=size.small)
+        alert(jsonMsg(isL ? "buy" : "sell", "sweep", "entry", entry, sl, tp, lots, wLbl + " + كسر هيكلي"), alert.freq_once_per_bar_close)
+    wDir := 0
+
+// ============================================================================
+// 2) الزخم: كسر هيكلي مع الترند بموجة ≥ minLeg ⇒ أمر محدد عند ارتداد retr من الموجة
+// ============================================================================
+var float lastPH = na
+var float lastPL = na
+if not na(ph)
+    lastPH := ph
+if not na(pl)
+    lastPL := pl
+
+momVolOk = not momVol or volume == 0 or na(volAvg) or volume >= volAvg * 1.1
+bosUp = not na(lastPH) and close > lastPH and close[1] <= lastPH
+bosDn = not na(lastPL) and close < lastPL and close[1] >= lastPL
+
+var int   mDir = 0
+var float mLim = na
+var float mSL  = na
+var float mTP  = na
+var int   mArm = 0
+var int   mExp = 0
+
+if useMom and (bosUp or bosDn) and flat and not dayLocked
+    isL  = bosUp
+    leg  = isL ? close - legLo : legHi - close
+    used = isL ? mUsedUp : mUsedDn
+    biasOk = not momBias or (isL ? close > dOpen : close < dOpen)
+    if not used and biasOk and momVolOk and leg >= minLeg
+        lim  = isL ? close - retr * leg : close + retr * leg
+        sl   = isL ? legLo - 1.5 : legHi + 1.5
+        risk = math.abs(lim - sl)
+        tgt  = isL ? nextUp(lim) : nextDn(lim)
+        tp   = na(tgt) ? (isL ? lim + 2 * risk : lim - 2 * risk) : tgt
+        rr   = math.abs(tp - lim) / math.max(risk, 0.01)
+        lots = lotFor(risk)
+        if risk >= 2 and rr >= 1.0 and lots >= 0.01
+            strategy.cancel("MOM L")
+            strategy.cancel("MOM S")
+            mDir := isL ? 1 : -1, mLim := lim, mSL := sl, mTP := tp, mArm := bar_index, mExp := bar_index + momWin
+            if isL
+                strategy.entry("MOM L", strategy.long, qty=lots * contract, limit=lim)
+                strategy.exit("MOM L x", "MOM L", stop=sl, limit=tp)
+            else
+                strategy.entry("MOM S", strategy.short, qty=lots * contract, limit=lim)
+                strategy.exit("MOM S x", "MOM S", stop=sl, limit=tp)
+            label.new(bar_index, isL ? high : low, "⏳ أمر زخم " + (isL ? "شراء" : "بيع") + " محدد " + str.tostring(lim, "#.##") +
+                 "\nوقف " + str.tostring(sl, "#.##") + " · هدف " + str.tostring(tp, "#.##") + " · لوت " + str.tostring(lots, "#.##"),
+                 style=isL ? label.style_label_down : label.style_label_up, color=color.new(#f59e0b, 15), textcolor=color.black, size=size.small)
+            alert(jsonMsg(isL ? "buy" : "sell", "momentum", "pending", lim, sl, tp, lots, "BOS موجة " + str.tostring(leg, "#.#") + "$ — أمر محدد عند ارتداد " + str.tostring(retr * 100, "#") + "%"), alert.freq_once_per_bar_close)
+    lastPH := na
+    lastPL := na
+
+// تعبئة الأمر أو انتهاء صلاحيته
+if mDir != 0 and bar_index > mArm
+    filled = mDir == 1 ? low <= mLim : high >= mLim
+    if filled
+        if mDir == 1
+            mUsedUp := true
+        else
+            mUsedDn := true
+        alert(jsonMsg(mDir == 1 ? "buy" : "sell", "momentum", "filled", mLim, mSL, mTP, lotFor(math.abs(mLim - mSL)), "تفعّل أمر الزخم"), alert.freq_once_per_bar_close)
+        mDir := 0
+    else if bar_index > mExp
+        strategy.cancel(mDir == 1 ? "MOM L" : "MOM S")
+        mDir := 0
+
+// ============================================================================
+// 3) المناطق الديناميكية
+// ============================================================================
+// FVG: تركواز صاعدة · وردي هابطة — تتقلّص مع امتلائها وتُحذف عند الامتلاء الكامل
+var array<box> fvgB = array.new<box>()
+var array<int> fvgD = array.new<int>()
+if showFvg and barstate.isconfirmed
+    if low > high[2] and low - high[2] >= 0.2 * atr
+        array.push(fvgB, box.new(bar_index - 1, low, bar_index + 1, high[2], border_color=color.new(#2dd4bf, 30), bgcolor=color.new(#2dd4bf, 82), extend=extend.right))
+        array.push(fvgD, 1)
+    if high < low[2] and low[2] - high >= 0.2 * atr
+        array.push(fvgB, box.new(bar_index - 1, low[2], bar_index + 1, high, border_color=color.new(#f472b6, 30), bgcolor=color.new(#f472b6, 82), extend=extend.right))
+        array.push(fvgD, -1)
+    n = array.size(fvgB)
+    if n > 0
+        for i = n - 1 to 0
+            b = array.get(fvgB, i)
+            d = array.get(fvgD, i)
+            top = box.get_top(b)
+            bot = box.get_bottom(b)
+            if box.get_left(b) < bar_index - 1
+                if d == 1 and low < top
+                    box.set_top(b, math.max(bot, low))
+                if d == -1 and high > bot
+                    box.set_bottom(b, math.min(top, high))
+            if box.get_top(b) - box.get_bottom(b) <= 0.01 or array.size(fvgB) > 24 and i == 0
+                box.delete(b)
+                array.remove(fvgB, i)
+                array.remove(fvgD, i)
+
+// أوردر بلوك: آخر شمعة معاكسة قبل اندفاع ≥ 1.5×ATR يغلق خلفها — أخضر طلب · برتقالي عرض، يُحذف عند كسره
+var array<box> obB = array.new<box>()
+var array<int> obD = array.new<int>()
+if showOb and barstate.isconfirmed
+    hi3 = math.max(high, high[1], high[2])
+    lo3 = math.min(low, low[1], low[2])
+    if close[3] < open[3] and hi3 - low[3] >= 1.5 * atr and close > high[3]
+        array.push(obB, box.new(bar_index - 3, high[3], bar_index + 1, low[3], border_color=#4ade80, border_width=2, bgcolor=color.new(#4ade80, 80), extend=extend.right, text="OB طلب", text_color=#4ade80, text_size=size.tiny, text_halign=text.align_left))
+        array.push(obD, 1)
+    if close[3] > open[3] and high[3] - lo3 >= 1.5 * atr and close < low[3]
+        array.push(obB, box.new(bar_index - 3, high[3], bar_index + 1, low[3], border_color=#fb923c, border_width=2, bgcolor=color.new(#fb923c, 80), extend=extend.right, text="OB عرض", text_color=#fb923c, text_size=size.tiny, text_halign=text.align_left))
+        array.push(obD, -1)
+    n = array.size(obB)
+    if n > 0
+        for i = n - 1 to 0
+            b = array.get(obB, i)
+            d = array.get(obD, i)
+            broken = d == 1 ? close < box.get_bottom(b) : close > box.get_top(b)
+            if broken or array.size(obB) > 12 and i == 0
+                box.delete(b)
+                array.remove(obB, i)
+                array.remove(obD, i)
+
+// المستويات
+plot(showLvl ? dOpen : na, "افتتاح اليوم", color.new(#e8e6dc, 0), 2, plot.style_linebr)
+plot(showLvl ? aH : na, "قمة آسيا", color.new(#facc15, 20), 1, plot.style_linebr)
+plot(showLvl ? aL : na, "قاع آسيا", color.new(#a78bfa, 20), 1, plot.style_linebr)
+plot(showLvl ? pdh : na, "قمة الأمس", color.new(#facc15, 0), 2, plot.style_linebr)
+plot(showLvl ? pdl : na, "قاع الأمس", color.new(#a78bfa, 0), 2, plot.style_linebr)
+plot(showLvl and not inLon ? lH : na, "قمة لندن", color.new(#22d3ee, 30), 1, plot.style_linebr)
+plot(showLvl and not inLon ? lL : na, "قاع لندن", color.new(#22d3ee, 30), 1, plot.style_linebr)
+bgcolor(showLvl and inAsia ? color.new(#facc15, 95) : showLvl and inLon ? color.new(#22d3ee, 96) : showLvl and inNY ? color.new(#34d399, 96) : na)
+
+// لوحة المعلومات
+var table tb = table.new(position.top_right, 2, 6, bgcolor=color.new(#262624, 10), border_width=1, border_color=color.new(#3e3e38, 0))
+if showTbl and barstate.islast
+    bias = close >= dOpen ? "▲ فوق الافتتاح" : "▼ تحت الافتتاح"
+    table.cell(tb, 0, 0, "الانحياز", text_color=#b0aea5, text_size=size.small)
+    table.cell(tb, 1, 0, bias, text_color=close >= dOpen ? #34d399 : #f87171, text_size=size.small)
+    table.cell(tb, 0, 1, "مخاطرة الصفقة", text_color=#b0aea5, text_size=size.small)
+    table.cell(tb, 1, 1, "$" + str.tostring(balance * riskPct / 100, "#") + " (" + str.tostring(riskPct, "#.#") + "%)", text_color=#e8e6dc, text_size=size.small)
+    table.cell(tb, 0, 2, "لوت لوقف 8$", text_color=#b0aea5, text_size=size.small)
+    table.cell(tb, 1, 2, str.tostring(lotFor(8), "#.##"), text_color=#e8e6dc, text_size=size.small)
+    table.cell(tb, 0, 3, "ربح/خسارة اليوم", text_color=#b0aea5, text_size=size.small)
+    table.cell(tb, 1, 3, str.tostring(strategy.equity - dayEq, "#.##") + "$", text_color=strategy.equity >= dayEq ? #34d399 : #f87171, text_size=size.small)
+    table.cell(tb, 0, 4, "الحالة", text_color=#b0aea5, text_size=size.small)
+    table.cell(tb, 1, 4, dayLocked ? "⛔ مقفل — بلغ حد اليوم" : mDir != 0 ? "⏳ أمر زخم معلّق" : "جاهز", text_color=dayLocked ? #f87171 : #e8e6dc, text_size=size.small)
+    table.cell(tb, 0, 5, "ATR", text_color=#b0aea5, text_size=size.small)
+    table.cell(tb, 1, 5, str.tostring(atr, "#.##") + "$", text_color=#e8e6dc, text_size=size.small)

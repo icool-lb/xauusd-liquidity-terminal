@@ -2,7 +2,7 @@
 // Databento (عقود الذهب GC من CME) — محمي بـ SCAN_KEY، البيانات للاستعمال الشخصي فقط (ترخيص CME)
 // GET /api/databento?key=…&mode=status            ← هل المفتاح يعمل؟ تأخّر البيانات؟ كلفة الطلبات؟
 // GET /api/databento?key=…&mode=candles&days=3    ← شموع 15د بحجم حقيقي (+ &delta=1 للدلتا، يومان كحد أقصى)
-// GET /api/databento?key=…&mode=bt&days=60        ← باك-تيست الاستراتيجيتين بالحجم الحقيقي وبفلاتر مختلفة
+// GET /api/databento?key=…&mode=bt&days=40&back=0 ← باك-تيست (back يزيح النافذة للخلف) الاستراتيجيتين بالحجم الحقيقي وبفلاتر مختلفة
 // كل طلب بيانات يُسعَّر أولاً، ويُرفض إن تجاوز &max= دولار (الافتراضي 1$) — حتى لا تصلك فاتورة مفاجئة.
 // ============================================================
 import { backtestStrats, getEngineCfg } from '../src/lib/engine.js';
@@ -66,11 +66,14 @@ export default async function handler(req: any, res: any) {
 
     if (mode === 'bt') {
       const days = Math.min(120, Math.max(5, Number(req.query?.days ?? 60) || 60));
-      const start = iso(endS - (days + 4) * DAY);
-      const cost = await dbCost('ohlcv-1m', start, endM);
+      // &back=N يزيح النافذة N يوماً للخلف — لاختبار فترات أطول على دفعات دون تجاوز مهلة الدالة
+      const back = Math.min(1500, Math.max(0, Number(req.query?.back ?? 0) || 0));
+      const endB = endS - back * DAY, endBIso = back ? iso(endB) : endM;
+      const start = iso(endB - (days + 4) * DAY);
+      const cost = await dbCost('ohlcv-1m', start, endBIso);
       if (cost > maxUsd) { res.status(402).json({ ok: false, error: 'cost above max', costUsd: cost, maxUsd }); return; }
       applyServerConfig();
-      const candles = (await dbM15(start, endM)).filter((c) => c.time + 900 <= endS);
+      const candles = (await dbM15(start, endBIso)).filter((c) => c.time + 900 <= endB);
       const rows = VARIANTS.map(([label, cfg]) => ({ label, cfg, ...backtestStrats(candles, days, cfg) }));
       res.status(200).json({ ok: true, source: 'databento', symbol: DB_SYMBOL, days, candles: candles.length,
         from: iso(candles[0]?.time ?? 0), to: iso(candles[candles.length - 1]?.time ?? 0), costUsd: cost, cfg: getEngineCfg(), rows });

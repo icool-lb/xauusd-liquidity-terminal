@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const out = mkdtempSync(join(tmpdir(), 'xau-'));
-await build({ entryPoints: { tvhook: 'api/tv-hook.ts', scan: 'api/scan.ts', telegram: 'api/telegram.ts', engine: 'src/lib/engine.ts', desk: 'api/_lib/desk.ts' },
+await build({ entryPoints: { tvhook: 'api/tv-hook.ts', scan: 'api/scan.ts', telegram: 'api/telegram.ts', engine: 'src/lib/engine.ts', desk: 'api/_lib/desk.ts', dbn: 'api/_lib/databento.ts', dbapi: 'api/databento.ts' },
   bundle: true, platform: 'node', format: 'esm', outdir: out, logLevel: 'error' });
 const scan = (await import(join(out, 'scan.js'))).default;
 const tg = (await import(join(out, 'telegram.js'))).default;
@@ -171,6 +171,35 @@ console.log('\n[4] Webhook من مؤشر TradingView');
   await tvh({ method: 'POST', query: { key: 'tvk' }, body: { side: 'sell', setup: 'manage', event: 'breakeven', price: 4190, sl: 4190, tp: 4170, note: 'الصفقة في ربح 1R', ticker: 'XAUUSD' } }, rr);
   const b = tgSent[0]?.text ?? '';
   ok(rr.code === 200 && /نقل الوقف إلى الدخول/.test(b) && /4190/.test(b), 'تنبيه المدير: نقل الوقف إلى الدخول', b.split('\n')[0]);
+}
+
+console.log('\n[5] Databento (fetch مُحاكى)');
+{
+  const B = await import(join(out, 'dbn.js'));
+  const csv = 'ts_event,rtype,publisher_id,instrument_id,open,high,low,close,volume,symbol\n' +
+    '2026-10-14T12:00:00.000000000Z,33,1,1,4170.100000000,4171.000000000,4169.500000000,4170.800000000,120,GC.v.0\n' +
+    '2026-10-14T12:14:00.000000000Z,33,1,1,4170.800000000,4173.200000000,4170.000000000,4172.900000000,80,GC.v.0\n' +
+    '2026-10-14T12:15:00.000000000Z,33,1,1,4172900000000,4174000000000,4172000000000,4173500000000,50,GC.v.0\n';
+  const c = B.to15(B.parseCsv(csv));
+  ok(c.length === 2 && c[0].open === 4170.1 && c[0].high === 4173.2 && c[0].close === 4172.9 && c[0].volume === 200 && c[1].close === 4173.5,
+    'تجميع الدقيقة ⇐ 15د بالحجم الحقيقي (نص عشري وعدد ×1e9)', JSON.stringify(c[0]));
+  const tr = B.deltaOf(B.parseCsv('ts_event,side,size,price\n2026-10-14T12:01:00Z,B,5,4170\n2026-10-14T12:02:00Z,A,3,4169\n2026-10-14T12:16:00Z,A,2,4171\n'));
+  const k = Math.floor(Date.parse('2026-10-14T12:00:00Z') / 1000);
+  ok(tr.get(k).buy === 5 && tr.get(k).sell === 3 && tr.get(k + 900).sell === 2, 'الدلتا: B شراء عدواني · A بيع عدواني');
+  const api = (await import(join(out, 'dbapi.js'))).default;
+  const realFetch = globalThis.fetch; const urls = [];
+  process.env.SCAN_KEY = process.env.SCAN_KEY || 'sk'; process.env.DATABENTO_API_KEY = 'db-secret-123';
+  globalThis.fetch = async (u, o) => {
+    urls.push({ u: String(u), auth: o?.headers?.Authorization });
+    if (String(u).includes('get_dataset_range')) return new Response(JSON.stringify({ start: '2010-06-06T00:00:00Z', end: '2026-10-14T12:20:00Z', schema: { 'ohlcv-1m': { end: '2026-10-14T12:20:00Z' } } }));
+    if (String(u).includes('get_cost')) return new Response('5.25');
+    return new Response(csv);
+  };
+  let r = mkRes(); await api({ query: { key: 'bad' } }, r); ok(r.code === 401, 'Databento: مفتاح خاطئ ⇐ 401');
+  r = mkRes(); await api({ query: { key: process.env.SCAN_KEY, mode: 'bt', days: '30' } }, r);
+  ok(r.code === 402 && r.body.costUsd === 5.25 && !urls.some((x) => x.u.includes('timeseries')), 'كلفة فوق الحد ⇐ رفض قبل سحب أي بيانات', r.body.error);
+  ok(urls.every((x) => x.auth === 'Basic ' + Buffer.from('db-secret-123:').toString('base64')) && !JSON.stringify(r.body).includes('db-secret'), 'المفتاح في ترويسة Basic فقط ولا يظهر في الاستجابة');
+  globalThis.fetch = realFetch;
 }
 
 console.log(fail ? `\n✗ ${fail} فشل` : '\n✓ كل الاختبارات نجحت');

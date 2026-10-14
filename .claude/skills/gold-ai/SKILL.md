@@ -43,7 +43,14 @@ METAAPI_TOKEN=… METAAPI_ACCOUNT_ID=… [METAAPI_SYMBOL=XAUUSD] node scripts/br
 ## مؤشر TradingView
 أي تعديل على قاعدة في المحرّك يُنقل إلى `icool-gold.pine` أيضاً، وإلا اختلف المؤشر عن المنصة. لا يمكن ترجمة Pine هنا —
 اطلب من المستخدم لصقه وإرسال أي خطأ يظهر في Pine Editor بالسطر. رسالة `alert()` بصيغة JSON:
-`{side, setup: sweep|momentum, event: entry|pending|filled, price, sl, tp, lot, rr, note, ticker}`.
+`{side, setup: sweep|momentum|manage, event: entry|pending|filled|breakeven, price, sl, tp, lot, rr, note, ticker}`.
+
+**مجلس المؤشر (V37):** جدول أسفل يمين الشارت — 🌏 آسيا (حجم النطاق وسحب طرفيه) · 🇪🇺 أوروبا (نطاق لندن وسحبه) ·
+🇺🇸 أمريكا (الانحياز من الافتتاح + تحذير بيانات 13:30) · 👔 المدير. المدير هو `canTrade` نفسه:
+لا حدّ يومي مكسور · صفقات اليوم < `maxTrades` (2) · خسائر متتالية < `stopLoss2` (2) · داخل مناطق القتل
+(07–10 و12–15 UTC) إن كان `safeKZ`. ويمنع دخول السحب أثناء أمر زخم معلّق. عند +`beAtR`R يُنقل الوقف إلى الدخول
+ويُرسل `setup:"manage", event:"breakeven"`. الإطار المعتمد **15 دقيقة**؛ على 5 دقائق تتضاعف الإشارات الضعيفة.
+عند شرح المؤشر لمستخدم: «لا دخول إلا إذا قال المدير ✅ جاهز وظهرت إشارة» — لا دخول يدوي.
 
 ## 3) تطوير الاستراتيجيات
 1. `node scripts/bt.mjs --days 30` ثم `--days 60` (أو المختبر في المنصة).

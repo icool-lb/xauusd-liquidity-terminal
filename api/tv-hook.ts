@@ -54,7 +54,8 @@ function format(o: Record<string, unknown>): string {
   const ev = String(o.event ?? '');
   const title = setup === 'momentum'
     ? (ev === 'pending' ? '⏳ أمر زخم معلّق (Limit)' : ev === 'filled' ? '✅ تفعّل أمر الزخم' : 'زخم')
-    : setup === 'sweep' ? 'سحب سيولة + كسر هيكلي' : 'تنبيه TradingView';
+    : setup === 'sweep' ? 'سحب سيولة + كسر هيكلي'
+    : setup === 'manage' && ev === 'breakeven' ? '🛡 نقل الوقف إلى الدخول — الصفقة بلا مخاطرة' : 'تنبيه TradingView';
   const lines = [`${isBuy ? '🟢' : isSell ? '🔴' : '⚡'} <b>${title}</b> · ${escape(String(o.ticker ?? 'XAUUSD'))} ${isBuy ? 'شراء' : isSell ? 'بيع' : ''}`];
   if (o.price) lines.push(`${ev === 'pending' ? 'أمر محدد عند' : 'دخول'} <b>${escape(String(o.price))}</b>`);
   if (o.sl || o.stop) lines.push(`وقف <b>${escape(String(o.sl ?? o.stop))}</b>${o.price && (o.sl ?? o.stop) ? ` (${Math.abs(Number(o.price) - Number(o.sl ?? o.stop)).toFixed(2)}$)` : ''}`);

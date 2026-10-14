@@ -167,6 +167,10 @@ console.log('\n[4] Webhook من مؤشر TradingView');
   rr = mkRes(); await tvh({ method: 'POST', query: { key: 'tvk' }, body: JSON.stringify(body) }, rr);
   const t = tgSent[0]?.text ?? '';
   ok(rr.code === 200 && /أمر زخم معلّق/.test(t) && /4180\.5/.test(t) && /\(8\.00\$\)/.test(t) && /0\.12/.test(t) && /R:R 2\.06/.test(t), 'رسالة TradingView: النوع والدخول والوقف واللوت و R:R', t.split('\n')[0]);
+  tgSent.length = 0; rr = mkRes();
+  await tvh({ method: 'POST', query: { key: 'tvk' }, body: { side: 'sell', setup: 'manage', event: 'breakeven', price: 4190, sl: 4190, tp: 4170, note: 'الصفقة في ربح 1R', ticker: 'XAUUSD' } }, rr);
+  const b = tgSent[0]?.text ?? '';
+  ok(rr.code === 200 && /نقل الوقف إلى الدخول/.test(b) && /4190/.test(b), 'تنبيه المدير: نقل الوقف إلى الدخول', b.split('\n')[0]);
 }
 
 console.log(fail ? `\n✗ ${fail} فشل` : '\n✓ كل الاختبارات نجحت');

@@ -1,6 +1,8 @@
 // اختبار الماسح وبوت Telegram ومحرّك الاستراتيجيتين — بلا شبكة (fetch مُحاكى)
 // node scripts/test-server.mjs
 import { build } from 'esbuild';
+// ساعة ثابتة (الأربعاء 8 أكتوبر 2026 20:30 UTC) — الاختبار لا يعتمد على يوم تشغيله ولا على إغلاق السوق
+Date.now = () => Date.UTC(2026, 9, 8, 20, 30);
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

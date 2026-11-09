@@ -37,12 +37,12 @@ export function CouncilPanel({ rounds, compact = false }: { rounds: Round[]; com
       </div>
       {/* مؤشّر القرار */}
       <div className="mt-2 rounded-xl bg-[#262624] p-2.5">
-        <div className="flex items-center justify-between text-[11px]">
+        <div className="flex items-center justify-between text-[11px]" dir="ltr">
           <span className="text-red-300">بيع</span>
           <b className={v.lean > 0 ? 'text-emerald-300' : v.lean < 0 ? 'text-red-300' : 'text-slate-200'}>{v.text}</b>
           <span className="text-emerald-300">شراء</span>
         </div>
-        <div className="relative mt-1.5 h-2 rounded-full bg-gradient-to-l from-emerald-500/50 via-slate-600/40 to-red-500/50" dir="ltr">
+        <div className="relative mt-1.5 h-2 rounded-full bg-gradient-to-r from-red-500/50 via-slate-600/40 to-emerald-500/50" dir="ltr">
           <span className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#1f1e1d] bg-amber-400 transition-all"
             style={{ left: `${50 + v.score / 2}%` }} />
         </div>

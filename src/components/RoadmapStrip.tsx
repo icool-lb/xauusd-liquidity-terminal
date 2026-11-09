@@ -21,7 +21,8 @@ export interface DbConfirm {
 
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function RoadmapStrip({ price, roadmap, archive, hasDbKey, dbConfirm }: {
+export function RoadmapStrip({ price, roadmap, archive, hasDbKey, dbConfirm, dayOpen }: {
+  dayOpen?: number;
   price: number;
   roadmap: RoadmapInfo | null;
   archive: boolean;
@@ -41,6 +42,12 @@ export function RoadmapStrip({ price, roadmap, archive, hasDbKey, dbConfirm }: {
             {up ? '▲ التوجه إلى' : '▼ التوجه إلى'} <b dir="ltr" className="font-mono text-[12px]">{fmt(roadmap.target)}</b>
           </span>
           <span className="shrink-0 text-slate-500">خلال <b className="text-slate-300">{roadmap.eta}</b></span>
+          {/* خارطة الطريق = موجة الدقائق القادمة؛ إن عاكست انحياز اليوم فهي تصحيح لا صفقة */}
+          {dayOpen != null && Number.isFinite(dayOpen) && (up ? price < dayOpen : price > dayOpen) && (
+            <span className="shrink-0 rounded-sm bg-amber-400/10 px-1.5 text-[10px] font-bold text-amber-300">
+              ⚠️ حركة قصيرة عكس انحياز اليوم ({price > dayOpen ? 'فوق' : 'تحت'} الافتتاح) — تصحيح داخل الاتجاه، ليست إشارة دخول
+            </span>
+          )}
           {roadmap.liq && (
             <span className="shrink-0 text-slate-400">
               🧲 منطقة اختبار وسحب سيولة: <b dir="ltr" className="font-mono font-bold text-amber-300">{fmt(roadmap.liq.price)}</b>

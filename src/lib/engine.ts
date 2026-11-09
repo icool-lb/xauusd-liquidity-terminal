@@ -668,10 +668,14 @@ export function detectMomentumState(dayCandles: Candle[], levels: Level[], daySt
     const strength = (wl ? upLevels[0] : dnLevels[0])?.strength;
     return { tp1, tp2, rr: Math.abs(tp1 - entry) / risk, strength };
   };
+  const withBiasOf = (a: Armed, wl: boolean) => Number.isFinite(dayOpen) && (wl ? a.bosPx > dayOpen : a.bosPx < dayOpen);
   const reasonsOf = (a: Armed, wl: boolean) => [
     `كسر هيكلي مع الترند (BOS) عند ${r2(a.bosPx)} — موجة ${r2(a.leg)}$`,
     ...(Number.isFinite(a.vr as number) ? [`حجم شمعة الكسر ×${r2(a.vr as number)} من المتوسط`] : []),
-    ...(Number.isFinite(dayOpen) ? [wl ? 'فوق الافتتاح = إيجابي (مع الانحياز)' : 'تحت الافتتاح = سلبي (مع الانحياز)'] : []),
+    // الانحياز الفعلي عند الكسر — لا افتراض (كان يُكتب «مع الانحياز» دائماً حتى للصفقات المضادة)
+    ...(Number.isFinite(dayOpen) ? [withBiasOf(a, wl)
+      ? (wl ? 'فوق الافتتاح = إيجابي (مع الانحياز)' : 'تحت الافتتاح = سلبي (مع الانحياز)')
+      : `⚠️ عكس انحياز اليوم — السعر ${wl ? 'تحت' : 'فوق'} الافتتاح (صفقة زخم مضادة)`] : []),
     `دخول بارتداد ${Math.round(retrace * 100)}% من موجة الكسر (أمر محدد)`,
     `الوقف خلف طرف الموجة بمسافة أمان 1.5$`,
   ];
@@ -741,7 +745,7 @@ export function detectMomentumState(dayCandles: Candle[], levels: Level[], daySt
           reason: reasonsOf(armed, wl),
           sweepTime: armed.bosTime, chochTime: c.time,
           status, exitPrice, pnlR, kind: 'mom', volRatio: armed.vr,
-          score: scoreOf({ rr, strength, volRatio: armed.vr, withBias: Number.isFinite(dayOpen), t: armed.bosTime }),
+          score: scoreOf({ rr, strength, volRatio: armed.vr, withBias: withBiasOf(armed, wl), t: armed.bosTime }),
         });
         used[armed.dir] = true; armed = null;
       }

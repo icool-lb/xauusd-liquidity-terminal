@@ -156,7 +156,14 @@ export function councilRound(inp: CouncilInput, now = Date.now() / 1000): Round 
   {
     const stop = Math.max(atr * 1.5, 3), usd = (inp.balance * inp.riskPct) / 100;
     const lot = Math.floor((usd / (stop * 100)) * 100) / 100;
-    if (inp.pending) add('bank', 'توجيه', `أمر الزخم المعلّق ${inp.pending.side === 'long' ? 'شراء' : 'بيع'} عند ${f2(inp.pending.limit)} هو الخطة الوحيدة الآن — لا تدخل قبله ولا تضاعف الحجم.`, inp.pending.side === 'long' ? 1 : -1, 1);
+    if (inp.pending) {
+      const pl: -1 | 1 = inp.pending.side === 'long' ? 1 : -1;
+      const side = pl > 0 ? 'شراء' : 'بيع';
+      const vsBias = (pl > 0) !== aboveOpen, vsCouncil = vLean !== 0 && vLean !== pl;
+      // المدير يحسم التعارض صراحةً بدل أن يتبنّى الأمر المعلّق ويناقض خلاصة المجلس
+      if (vsBias || vsCouncil) add('bank', 'تنبيه', `⚠️ تعارض: أمر الزخم المعلّق ${side} عند ${f2(inp.pending.limit)} ${[vsBias ? `عكس انحياز اليوم (السعر ${aboveOpen ? 'فوق' : 'تحت'} الافتتاح)` : '', vsCouncil ? `عكس ميل المجلس (${vLean > 0 ? 'شرائي' : 'بيعي'} ${Math.abs(score)}%)` : ''].filter(Boolean).join(' و')}. صفقات الزخم المضادة للافتتاح قاربت 0R في آخر 6 أشهر من الباك-تيست — إن دخلتها فبنصف الحجم، والأفضل تجاهلها.`, 0, 2);
+      else add('bank', 'توجيه', `أمر الزخم المعلّق ${side} عند ${f2(inp.pending.limit)} متوافق مع انحياز اليوم وميل المجلس — هو الخطة الآن، لا تدخل قبله ولا تضاعف الحجم.`, pl, 1);
+    }
     else if (vLean === 0) add('bank', 'توجيه', `المجلس منقسم — البنوك لا تتداول بلا أفضلية. حماية رأس المال أولاً: انتظر.`);
     else add('bank', 'توصية', `خلاصة المجلس ${vLean > 0 ? 'شرائية' : 'بيعية'} (${Math.abs(score)}%). الحجم الأقصى ${lot.toFixed(2)} لوت لوقف ${f2(stop)}$ (1.5×ATR) ومخاطرة ${inp.riskPct}%.`, vLean, 1);
   }

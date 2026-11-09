@@ -3,6 +3,7 @@
 // تجيب فوراً: شراء أم بيع؟ من أين؟ وقف وهدف أين؟ لماذا؟ وهل نجحت؟
 // ============================================================
 import type { DayAnalysis, Signal } from '../lib/engine';
+import { getEngineCfg } from '../lib/engine';
 import { computeOTE } from '../lib/engine';
 
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,6 +26,8 @@ function PendingBlock({ analysis }: { analysis: DayAnalysis }) {
   const p = analysis.momPending;
   if (!p) return null;
   const long = p.side === 'long';
+  const last = analysis.candles[analysis.candles.length - 1]?.close ?? p.limit;
+  const againstBias = Number.isFinite(analysis.open) && (long ? last < analysis.open : last > analysis.open);
   return (
     <div className="mt-1.5 rounded-sm border border-dashed border-orange-400/60 bg-orange-400/10 p-1.5 text-[9px]">
       <div className="flex flex-wrap items-center gap-x-2">
@@ -36,6 +39,11 @@ function PendingBlock({ analysis }: { analysis: DayAnalysis }) {
         <span className="font-mono text-slate-500" dir="ltr">حتى {hm(p.expiresAt)} UTC</span>
       </div>
       <div className="mt-0.5 text-slate-400">{p.reason.join(' · ')}</div>
+      {againstBias && (
+        <div className="mt-1 rounded-sm bg-red-500/10 px-1.5 py-1 text-[9.5px] font-bold text-red-300">
+          ⚠️ صفقة مضادة لانحياز اليوم (السعر {last >= analysis.open ? 'فوق' : 'تحت'} الافتتاح {fmt(analysis.open)}) — في آخر 6 أشهر قاربت هذه الصفقات 0R. نصف الحجم أو تجاهلها.
+        </div>
+      )}
     </div>
   );
 }
@@ -86,7 +94,7 @@ export function SignalCard({ analysis, price }: { analysis: DayAnalysis | null; 
           <span className="rounded-sm border border-[#4d4c45] px-2 py-0.5 text-[9px] text-slate-400">لا إشارة بعد — المنصة تنتظر اكتمال السيناريو المؤسسي</span>
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
-          شرط الدخول (بلا استثناء): <b className="text-amber-300">① سحب سيولة</b> لمستوى ← <b className="text-fuchsia-300">② كسر هيكلي معاكس</b> ← <b className="text-cyan-300">③ التداول بجهة الافتتاح اليومي</b>.
+          شرط الدخول (بلا استثناء): <b className="text-amber-300">① سحب سيولة</b> لمستوى ← <b className="text-fuchsia-300">② كسر هيكلي معاكس</b> {getEngineCfg().openFilter ? <> ← <b className="text-cyan-300">③ التداول بجهة الافتتاح اليومي</b></> : <span className="text-slate-400"> (فلتر الافتتاح متوقف)</span>}.
         </p>
         {(above.length > 0 || below.length > 0) && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[9px]">

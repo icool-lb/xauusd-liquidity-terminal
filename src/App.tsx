@@ -26,7 +26,7 @@ import {
   type Candle, type DayAnalysis, type NewsEvent,
 } from './lib/engine';
 import {
-  loadCreds, saveCreds, loadRegion, resolveAccount, fetchHistory, fetchCurrentCandle, fetchPrice,
+  loadCreds, saveCreds, loadRegion, resolveAccount, fetchHistory, fetchPrice,
   type MetaApiCreds,
 } from './lib/metaapi';
 const DAY = 24 * 3600;
@@ -131,31 +131,50 @@ export default function App() {
     return () => clearInterval(id);
   }, [liveStatus, creds]);
 
-  // تحديث الشموع الحالية (15م + 1م) والسعر كل 5 ثوانٍ
+  // السعر الحي: نقطة current-candles في MetaAPI تعيد شمعة مخزّنة قديمة (أول شمعة بعد افتتاح الأحد) فيتجمّد السعر.
+  // البديل: current-price كل 3 ثوانٍ يبني الشمعة الحالية لكل فريم (1م/5م/15م)،
+  // وتاريخ قصير كل دقيقة يصحّح الشموع المكتملة (OHLC والحجم الحقيقيان).
   useEffect(() => {
     if (liveStatus !== 'ok' || !creds) return;
-    const merge = (prev: Candle[], cc: Candle) => {
-      if (!prev.length) return [cc];
+    const tickInto = (prev: Candle[], sec: number, px: number, t: number): Candle[] => {
+      if (!prev.length || !Number.isFinite(px)) return prev;
+      const k = Math.floor(t / sec) * sec;
       const last = prev[prev.length - 1];
-      if (cc.time === last.time) return [...prev.slice(0, -1), cc];
-      if (cc.time > last.time) return [...prev, cc];
+      if (k === last.time) {
+        if (last.close === px && last.high >= px && last.low <= px) return prev;
+        return [...prev.slice(0, -1), { ...last, close: px, high: Math.max(last.high, px), low: Math.min(last.low, px) }];
+      }
+      if (k > last.time) return [...prev, { time: k, open: last.close, high: Math.max(last.close, px), low: Math.min(last.close, px), close: px, volume: 0 }];
       return prev;
     };
+    const mergeTail = (prev: Candle[], fresh: Candle[]): Candle[] => {
+      if (!fresh.length) return prev;
+      const t0 = fresh[0].time;
+      const head = prev.filter((c) => c.time < t0);
+      // آخر شمعة من التاريخ قد تكون أقدم من الحيّة المبنية بالأسعار — نحتفظ بالأحدث
+      const tail = prev.filter((c) => c.time > fresh[fresh.length - 1].time);
+      return [...head, ...fresh, ...tail];
+    };
+    let busy = false;
     const id = setInterval(async () => {
+      if (busy) return; busy = true;
       try {
-        const [c15, c1] = await Promise.all([
-          fetchCurrentCandle(creds, regionRef.current),
-          fetchCurrentCandle(creds, regionRef.current, '1m'),
-        ]);
-        setLiveData((prev) => merge(prev, c15));
-        setM1Data((prev) => merge(prev, c1));
-      } catch { /* تجاهل أخطاء النبضة الواحدة */ }
-    }, 5000);
-    // تحديث تاريخ 5 دقائق كل ساعة
+        const p = await fetchPrice(creds, regionRef.current);
+        const px = (p.bid + p.ask) / 2 || p.bid;
+        const t = Math.floor(Date.now() / 1000);
+        setLiveData((prev) => tickInto(prev, 900, px, t));
+        setM5Data((prev) => tickInto(prev, 300, px, t));
+        setM1Data((prev) => tickInto(prev, 60, px, t));
+      } catch { /* تجاهل نبضة فاشلة */ } finally { busy = false; }
+    }, 3000);
+    const idH = setInterval(() => {
+      fetchHistory(creds, regionRef.current, 1, '1m').then((f) => setM1Data((prev) => mergeTail(prev, f))).catch(() => { /* تجاهل */ });
+      fetchHistory(creds, regionRef.current, 1, '15m').then((f) => setLiveData((prev) => mergeTail(prev, f))).catch(() => { /* تجاهل */ });
+    }, 60_000);
     const id5 = setInterval(() => {
       fetchHistory(creds, regionRef.current, 3, '5m').then(setM5Data).catch(() => { /* تجاهل */ });
-    }, 3600_000);
-    return () => { clearInterval(id); clearInterval(id5); };
+    }, 15 * 60_000);
+    return () => { clearInterval(id); clearInterval(idH); clearInterval(id5); };
   }, [liveStatus, creds]);
 
   const all = liveData;
@@ -291,7 +310,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbConfirm, wave, dayOffset]);
 
-  const displayCandles = useMemo(() => aggregate(all, tf), [all, tf]);
+  // 1م و5م من سلاسلهما الحقيقية (لا يمكن تجميعهما من 15م) — الباقي تجميع من 15م
+  const displayCandles = useMemo(() => (tf === 60 && m1Data.length ? m1Data : tf === 300 && m5Data.length ? m5Data : aggregate(all, tf)), [all, tf, m1Data, m5Data]);
 
   // تحيز H1: إغلاق آخر ساعة مقابل متوسط آخر 8 ساعات
   const h1Bias = useMemo(() => {
@@ -413,7 +433,7 @@ export default function App() {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400 font-display text-[15px] font-bold text-[#1f1e1d]">Au</div>
           <div>
             <div className="font-display text-[17px] font-bold leading-none text-slate-50">منصة سيولة الذهب</div>
-            <div className="mt-1 text-[10px] text-slate-500"><span dir="ltr">XAUUSD · V38</span> · السحب والحجم · الزخم</div>
+            <div className="mt-1 text-[10px] text-slate-500"><span dir="ltr">XAUUSD · V38.1</span> · السحب والحجم · الزخم</div>
           </div>
         </div>
         <div dir="ltr" className="flex items-baseline gap-2 font-mono">
@@ -459,7 +479,7 @@ export default function App() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {/* ===== المكتب: يبقى مركّباً دائماً (الشارت والتنبيهات تعمل في الخلفية) ===== */}
         <div className={tab === 'desk' ? '' : 'hidden'}>
-          {liveStatus === 'ok' && <RoadmapStrip price={lastPrice} roadmap={roadmap} archive={archiveMode} hasDbKey={!!loadDbKey()} dbConfirm={dbConfirm} />}
+          {liveStatus === 'ok' && <RoadmapStrip price={lastPrice} roadmap={roadmap} dayOpen={analysis?.open} archive={archiveMode} hasDbKey={!!loadDbKey()} dbConfirm={dbConfirm} />}
           {liveStatus === 'ok' && (
             <div className="mx-3 mt-3">
               <Fold id="today" title="صفقة اليوم — الخطة والأسباب والنتيجة" accent="#d97757" defaultOpen
@@ -518,7 +538,7 @@ export default function App() {
             <main className={`order-1 min-w-0 ${card} p-2 lg:order-2`}>
               <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
                 <div dir="ltr" className="flex rounded-xl bg-[#30302e] p-0.5 font-mono text-[10.5px]">
-                  {[[300, '5m'], [900, '15m'], [1800, '30m'], [3600, '1H'], [14400, '4H'], [86400, '1D']].map(([sec, l]) => (
+                  {[[60, '1m'], [300, '5m'], [900, '15m'], [1800, '30m'], [3600, '1H'], [14400, '4H'], [86400, '1D']].map(([sec, l]) => (
                     <button key={sec} onClick={() => setTf(sec as number)}
                       className={`rounded-lg px-2 py-1 transition ${tf === sec ? 'bg-amber-400 text-[#1f1e1d]' : 'text-slate-400 hover:text-slate-100'}`}>{l}</button>
                   ))}
